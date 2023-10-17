@@ -4,11 +4,11 @@
 #include "render/camera.h"
 #include "render/d3d11_common.h"
 #include "render/annotation.h"
+// #include "render/resource/shader_cache.h"
 
 #include "scene.h"
 #include "model.h"
 #include "light.h"
-#include "particle_system.h"
 
 Scene::Scene() : uniform_data_{}
 {
@@ -23,12 +23,12 @@ void Scene::initialize()
     auto device = Game::inst()->render().device();
 
     {
+        opaque_pass_shader_.set_ps_shader_from_file("./resources/shaders/deferred/opaque_pass.hlsl", "PSMain");
+        opaque_pass_shader_.set_vs_shader_from_file("./resources/shaders/deferred/opaque_pass.hlsl", "VSMain");
         D3D11_INPUT_ELEMENT_DESC inputs[] = {
             { "POSITION_UV_X", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
             { "NORMAL_UV_Y", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         };
-        opaque_pass_shader_.set_vs_shader_from_file("./resources/shaders/deferred/opaque_pass.hlsl", "VSMain", nullptr, nullptr);
-        opaque_pass_shader_.set_ps_shader_from_file("./resources/shaders/deferred/opaque_pass.hlsl", "PSMain", nullptr, nullptr);
         opaque_pass_shader_.set_input_layout(inputs, std::size(inputs));
 #ifndef NDEBUG
         opaque_pass_shader_.set_name("opaque_pass");
@@ -36,8 +36,8 @@ void Scene::initialize()
     }
 
     {
-        present_shader_.set_vs_shader_from_file("./resources/shaders/deferred/present_shader.hlsl", "VSMain", nullptr, nullptr);
-        present_shader_.set_ps_shader_from_file("./resources/shaders/deferred/present_shader.hlsl", "PSMain", nullptr, nullptr);
+        present_shader_.set_ps_shader_from_file("./resources/shaders/deferred/present_shader.hlsl", "PSMain");
+        present_shader_.set_vs_shader_from_file("./resources/shaders/deferred/present_shader.hlsl", "VSMain");
 #ifndef NDEBUG
         present_shader_.set_name("present");
 #endif
@@ -54,7 +54,9 @@ void Scene::initialize()
     assemble_rast_desc.FillMode = D3D11_FILL_SOLID;
     D3D11_CHECK(device->CreateRasterizerState(&assemble_rast_desc, &assemble_rasterizer_state_));
 
-    uniform_buffer_.initialize(sizeof(uniform_data_), D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE);
+    uniform_buffer_.initialize(&uniform_data_);
+
+    opaque_pass_shader_.attach_buffer(0U, &uniform_buffer_);
 
     D3D11_SAMPLER_DESC tex_sampler_desc{};
     tex_sampler_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -177,9 +179,6 @@ void Scene::initialize()
     for (auto& l : lights_) {
         l->initialize();
     }
-    for (auto& p : particle_systems_) {
-        p->initialize();
-    }
 }
 
 void Scene::destroy()
@@ -187,9 +186,6 @@ void Scene::destroy()
     models_.clear();
     for (auto& l : lights_) {
         l->destroy_resources();
-    }
-    for (auto& p : particle_systems_) {
-        p->destroy_resources();
     }
     lights_.clear();
     uniform_buffer_.destroy();
@@ -206,13 +202,13 @@ void Scene::destroy()
         SAFE_RELEASE(deferred_gbuffers_view_[i]);
         SAFE_RELEASE(deferred_gbuffers_[i]);
     }
-    opaque_pass_shader_.destroy();
     SAFE_RELEASE(light_depth_state_);
-    present_shader_.destroy();
     SAFE_RELEASE(light_blend_state_);
     SAFE_RELEASE(light_buffer_view_);
     SAFE_RELEASE(light_buffer_target_view_);
     SAFE_RELEASE(light_buffer_);
+    opaque_pass_shader_.destroy();
+    present_shader_.destroy();
 }
 
 void Scene::add_model(Model* model)
@@ -223,11 +219,6 @@ void Scene::add_model(Model* model)
 void Scene::add_light(Light* light)
 {
     lights_.push_back(light);
-}
-
-void Scene::add_particle_system(ParticleSystem* particle_system)
-{
-    particle_systems_.push_back(particle_system);
 }
 
 void Scene::update()
@@ -242,10 +233,6 @@ void Scene::update()
 
     for (auto& l : lights_) {
         l->update();
-    }
-
-    for (auto& p : particle_systems_) {
-        p->update();
     }
 }
 
@@ -285,9 +272,8 @@ void Scene::draw()
         context->RSSetState(opaque_rasterizer_state_);
 
         // draw models
+        uniform_buffer_.update(&uniform_data_);
         opaque_pass_shader_.use();
-        uniform_buffer_.update_data(&uniform_data_);
-        uniform_buffer_.bind(0);
 
         for (auto& model : models_) {
             model->draw();
@@ -297,18 +283,6 @@ void Scene::draw()
     context->OMSetRenderTargets(1, &light_buffer_target_view_, deferred_depth_target_view_);
     float clear_color[4] = { 0.f, 0.f, 0.f, 1.f };
     context->ClearRenderTargetView(light_buffer_target_view_, clear_color);
-
-    // particles
-    {
-        Annotation annotation("Particles");
-        context->OMSetRenderTargets(1, &light_buffer_target_view_, deferred_depth_target_view_);
-        for (auto& p : particle_systems_) {
-            p->set_depth_shader_resource_view(deferred_depth_view_, deferred_gbuffers_view_[1]);
-            p->draw();
-        }
-    }
-
-    // context->OMSetRenderTargets(1, &light_buffer_target_view_, deferred_depth_target_view_);
 
     // lights pass
     {
@@ -320,7 +294,8 @@ void Scene::draw()
         context->PSSetShaderResources(0, gbuffer_count_, deferred_gbuffers_view_);
         // context->PSSetShaderResources(gbuffer_count_, 1, &deferred_depth_view_);
         context->PSSetSamplers(0, 1, &texture_sampler_state_);
-        uniform_buffer_.bind(0);
+        context->PSSetConstantBuffers(0, 1, &uniform_buffer_.getBuffer());
+        context->VSSetConstantBuffers(0, 1, &uniform_buffer_.getBuffer());
 
         for (auto& l : lights_) {
             l->draw();

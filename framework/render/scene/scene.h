@@ -6,6 +6,8 @@
 #include <SimpleMath.h>
 using namespace DirectX::SimpleMath;
 
+#include "render/scene/mesh.h"
+
 #include "render/resource/buffer.h"
 #include "render/resource/shader.h"
 
@@ -24,17 +26,13 @@ public:
 
     void add_light(class Light* light);
 
-    void add_particle_system(class ParticleSystem* particle_system);
-
     void update();
     void draw();
 private:
     std::vector<class Model*> models_;
     std::vector<class Light*> lights_;
-    std::vector<class ParticleSystem*> particle_systems_;
 
-    ConstBuffer uniform_buffer_;
-    struct
+    struct UniformData
     {
         Matrix view_proj;
         Matrix inv_view_proj;
@@ -43,6 +41,7 @@ private:
         Vector3 camera_dir;
         float screen_height;
     } uniform_data_;
+    DynamicBuffer<UniformData> uniform_buffer_;
 
     // opaque pass
     GraphicsShader opaque_pass_shader_;

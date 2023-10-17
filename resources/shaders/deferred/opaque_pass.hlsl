@@ -39,9 +39,7 @@ cbuffer ModelData : register(b1)
 
 cbuffer MeshData : register(b2)
 {
-    uint is_pbr;
     uint material_flags;
-    float2 MeshData_dummy;
 };
 
 Texture2D<float4> diffuse_tex   : register(t1);

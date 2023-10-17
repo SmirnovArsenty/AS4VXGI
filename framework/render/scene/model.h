@@ -43,11 +43,11 @@ private:
 
     std::vector<class Mesh*> meshes_;
 
-    ConstBuffer uniform_buffer_;
-    struct {
+    struct UniformData {
         Matrix transform;
         Matrix inverse_transpose_transform;
     } uniform_data_;
+    DynamicBuffer<UniformData> uniform_buffer_;
 
     // model extents
     Vector3 min_;

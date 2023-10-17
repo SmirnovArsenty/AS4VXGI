@@ -41,7 +41,7 @@ void Model::load()
         mesh->initialize();
     }
 
-    uniform_buffer_.initialize(sizeof(uniform_data_), D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE);
+    uniform_buffer_.initialize(&uniform_data_);
 }
 
 void Model::unload()
@@ -107,8 +107,11 @@ void Model::draw()
 {
     Annotation annotation("draw:" + filename_);
 
-    uniform_buffer_.update_data(&uniform_data_);
-    uniform_buffer_.bind(1);
+    auto context = Game::inst()->render().context();
+
+    uniform_buffer_.update(&uniform_data_);
+    context->PSSetConstantBuffers(1U, 1U, &uniform_buffer_.getBuffer());
+    context->VSSetConstantBuffers(1U, 1U, &uniform_buffer_.getBuffer());
 
     for (auto& mesh : meshes_) {
         mesh->draw();

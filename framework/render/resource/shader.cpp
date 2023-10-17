@@ -89,6 +89,78 @@ void GraphicsShader::set_vs_shader_from_file(const std::string& filename,
                                            nullptr, &vertex_shader_));
 }
 
+void GraphicsShader::set_ds_shader_from_file(const std::string& filename,
+                                                                    const std::string& entrypoint,
+                                                                    D3D_SHADER_MACRO* macro, ID3DInclude* include)
+{
+    assert(domain_bc_ == nullptr);
+    assert(domain_shader_ == nullptr);
+
+    // translate filename to wstring
+    std::wstringstream wfilename;
+    wfilename << filename.c_str();
+
+    ID3DBlob* error_code = nullptr;
+
+    unsigned int compile_flags = 0;
+#ifndef NDEBUG
+    compile_flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#endif
+    // don't use D3D11_CHECK for this call, need to know compilation error message
+    HRESULT status = D3DCompileFromFile(wfilename.str().c_str(), macro, include,
+                                        entrypoint.c_str(), "ds_5_0",
+                                        compile_flags, 0,
+                                        &domain_bc_, &error_code);
+    if (error_code) {
+        std::stringstream err;
+        err << (char*)(error_code->GetBufferPointer());
+        OutputDebugString(err.str().c_str());
+    }
+    if (FAILED(status)) {
+        assert(false);
+    }
+    auto device = Game::inst()->render().device();
+    D3D11_CHECK(device->CreateDomainShader(domain_bc_->GetBufferPointer(),
+                                           domain_bc_->GetBufferSize(),
+                                           nullptr, &domain_shader_));
+}
+
+void GraphicsShader::set_hs_shader_from_file(const std::string& filename,
+                                                                    const std::string& entrypoint,
+                                                                    D3D_SHADER_MACRO* macro, ID3DInclude* include)
+{
+    assert(hull_bc_ == nullptr);
+    assert(hull_shader_ == nullptr);
+
+    // translate filename to wstring
+    std::wstringstream wfilename;
+    wfilename << filename.c_str();
+
+    ID3DBlob* error_code = nullptr;
+
+    unsigned int compile_flags = 0;
+#ifndef NDEBUG
+    compile_flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#endif
+    // don't use D3D11_CHECK for this call, need to know compilation error message
+    HRESULT status = D3DCompileFromFile(wfilename.str().c_str(), macro, include,
+                                        entrypoint.c_str(), "hs_5_0",
+                                        compile_flags, 0,
+                                        &hull_bc_, &error_code);
+    if (error_code) {
+        std::stringstream err;
+        err << (char*)(error_code->GetBufferPointer());
+        OutputDebugString(err.str().c_str());
+    }
+    if (FAILED(status)) {
+        assert(false);
+    }
+    auto device = Game::inst()->render().device();
+    D3D11_CHECK(device->CreateHullShader(hull_bc_->GetBufferPointer(),
+                                         hull_bc_->GetBufferSize(),
+                                         nullptr, &hull_shader_));
+}
+
 void GraphicsShader::set_gs_shader_from_file(const std::string& filename,
                                      const std::string& entrypoint,
                                      D3D_SHADER_MACRO* macro, ID3DInclude* include)
@@ -263,6 +335,8 @@ void GraphicsShader::set_ps_shader_from_memory(const std::string& data,
 
 void GraphicsShader::set_input_layout(D3D11_INPUT_ELEMENT_DESC* inputs, size_t count)
 {
+    assert(vertex_bc_ != nullptr);
+    assert(input_layout_ == nullptr);
     auto device = Game::inst()->render().device();
     D3D11_CHECK(device->CreateInputLayout(
                 inputs, static_cast<uint32_t>(count),
@@ -275,12 +349,41 @@ void GraphicsShader::use()
 {
     auto context = Game::inst()->render().context();
     context->IASetInputLayout(input_layout_);
+    if (index_buffer_ != nullptr) {
+        static_cast<IndexBuffer<uint32_t>*>(index_buffer_)->bind();
+    }
+    if (vertex_buffer_ != nullptr) {
+        UINT offsets = 0;
+        context->IASetVertexBuffers(0, 1, &vertex_buffer_->getBuffer(),
+                                    &static_cast<VertexBuffer<uint32_t>*>(vertex_buffer_)->buffer_type,
+                                    &offsets);
+    }
     context->VSSetShader(vertex_shader_, nullptr, 0);
     context->HSSetShader(hull_shader_, nullptr, 0);
     context->DSSetShader(domain_shader_, nullptr, 0);
     context->GSSetShader(geometry_shader_, nullptr, 0);
     context->PSSetShader(pixel_shader_, nullptr, 0);
     context->CSSetShader(nullptr, nullptr, 0);
+
+    for (auto& [slot, buffer] : buffers_)
+    {
+        ID3D11Buffer* resource = buffer->getBuffer();
+        context->VSSetConstantBuffers(slot, 1, &resource);
+        context->HSSetConstantBuffers(slot, 1, &resource);
+        context->DSSetConstantBuffers(slot, 1, &resource);
+        context->GSSetConstantBuffers(slot, 1, &resource);
+        context->PSSetConstantBuffers(slot, 1, &resource);
+    }
+
+    for (auto& [slot, resource] : resources_)
+    {
+        ID3D11ShaderResourceView*const& srv = resource->getSRV();
+        context->VSSetShaderResources(slot, 1, &srv);
+        context->DSSetShaderResources(slot, 1, &srv);
+        context->HSSetShaderResources(slot, 1, &srv);
+        context->GSSetShaderResources(slot, 1, &srv);
+        context->PSSetShaderResources(slot, 1, &srv);
+    }
 }
 
 void GraphicsShader::destroy()
@@ -392,6 +495,18 @@ void ComputeShader::use()
     context->GSSetShader(nullptr, nullptr, 0);
     context->PSSetShader(nullptr, nullptr, 0);
     context->CSSetShader(compute_shader_, nullptr, 0);
+
+    for (auto& [slot, buffer]: buffers_)
+    {
+        ID3D11Buffer* resource = buffer->getBuffer();
+        context->CSSetConstantBuffers(slot, 1, &resource);
+    }
+
+    for (auto& [slot, resource] : resources_)
+    {
+        ID3D11ShaderResourceView* srv = resource->getSRV();
+        context->CSSetShaderResources(slot, 1, &srv);
+    }
 }
 
 void ComputeShader::destroy()

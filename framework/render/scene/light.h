@@ -46,13 +46,13 @@ public:
     void update() override;
     void destroy_resources() override;
 private:
-    struct {
+    struct AmbientData {
         Vector4 color;
     } ambient_data_;
-    ConstBuffer ambient_buffer_;
+    DynamicBuffer<AmbientData> ambient_buffer_;
     Vector3 color_;
 
-    Shader* shader_;
+    GraphicsShader shader_;
 };
 
 class DirectionLight : public Light
@@ -85,12 +85,11 @@ public:
     void set_direction(const Vector3& direction);
 
 private:
-    struct
-    {
+    struct DirectionData {
         Vector4 color;
         Vector4 direction;
     } direction_data_;
-    ConstBuffer direction_buffer_;
+    DynamicBuffer<DirectionData> direction_buffer_;
 
     Vector3 color_;
     Vector3 direction_;
@@ -103,7 +102,7 @@ private:
     ID3D11DepthStencilState* ds_state_{ nullptr };
     ID3D11BlendState* blend_state_{ nullptr };
 
-    Shader* shader_;
+    GraphicsShader shader_;
 };
 
 class PointLight : public Light
@@ -119,12 +118,12 @@ public:
     void destroy_resources() override;
 
 private:
-    struct {
+    struct PointData {
         Matrix transform;
         Vector4 color;
         Vector4 position_radius;
     } point_data_;
-    ConstBuffer point_buffer_;
+    DynamicBuffer<PointData> point_buffer_;
 
     Vector3 color_;
     Vector3 position_;
@@ -132,10 +131,10 @@ private:
 
     std::vector<Vector3> vertices_;
     std::vector<uint32_t> indices_;
-    Buffer vertex_buffer_;
-    Buffer index_buffer_;
+    VertexBuffer<Vector3> vertex_buffer_;
+    IndexBuffer<uint32_t> index_buffer_;
 
     ID3D11RasterizerState* rasterizer_state_{ nullptr };
 
-    Shader* shader_;
+    GraphicsShader shader_;
 };

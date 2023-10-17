@@ -28,15 +28,14 @@ public:
     void centrate(Vector3 center);
 private:
     std::vector<Vertex> vertices_;
-    Buffer vertex_buffer_;
+    VertexBuffer<Vertex> vertex_buffer_;
     std::vector<uint32_t> indices_;
-    Buffer index_buffer_;
+    IndexBuffer<uint32_t> index_buffer_;
     Material* material_;
 
-    struct {
-        uint32_t is_pbr;
+    struct UniformData
+    {
         uint32_t material_flags;
-        float dummy[2];
     } uniform_data_;
-    ConstBuffer uniform_buffer_;
+    DynamicBuffer<UniformData> uniform_buffer_;
 };

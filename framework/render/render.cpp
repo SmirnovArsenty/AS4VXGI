@@ -8,7 +8,6 @@
 #include "win32/win.h"
 #include "win32/input.h"
 #include "d3d11_common.h"
-#include "resource/shader_cache.h"
 #include "camera.h"
 
 void Render::initialize()
@@ -127,8 +126,6 @@ void Render::initialize()
 
     camera_ = new Camera();
     // camera_->set_camera(Vector3(100.f), Vector3(0.f, 0.f, 1.f));
-
-    shader_cache_ = new ShaderCache();
 
     // initialize debug annotations
     context_->QueryInterface(__uuidof(ID3DUserDefinedAnnotation), reinterpret_cast<void**>(&user_defined_annotation_));
@@ -263,10 +260,6 @@ void Render::destroy_resources()
 
     user_defined_annotation_->Release();
 
-    shader_cache_->clear();
-    delete shader_cache_;
-    shader_cache_ = nullptr;
-
     delete camera_;
     camera_ = nullptr;
 
@@ -338,11 +331,6 @@ void Render::destroy_depth_stencil_texture_and_view()
 Camera* Render::camera() const
 {
     return camera_;
-}
-
-ShaderCache* Render::shader_cache() const
-{
-    return shader_cache_;
 }
 
 ID3DUserDefinedAnnotation* Render::user_defined_annotation() const

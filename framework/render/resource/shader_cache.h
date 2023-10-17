@@ -21,7 +21,39 @@ public:
     ShaderCache();
     ~ShaderCache();
 
-    Shader* add_shader(const std::string&, ShaderFlags, D3D_SHADER_MACRO* macro = nullptr);
+    Shader* add_graphics_shader(const std::string& path, uint32_t flags, D3D_SHADER_MACRO* macro)
+    {
+        assert(flags != ShaderCache::S_COMPUTE);
+
+        auto& shader_in_cache = shaders_.find(path);
+        if (shader_in_cache != shaders_.end()) {
+            return shader_in_cache->second; // already added
+        }
+        Shader* to_be_added = nullptr;
+        { // add graphics shader
+            GraphicsShader<VertexType, IndexType>* s = new GraphicsShader<VertexType, IndexType>();
+            if (flags & ShaderFlags::S_VERTEX) {
+                s->set_vs_shader_from_file(path, "VSMain", macro);
+            }
+            if (flags & ShaderFlags::S_HULL) {
+                s->set_hs_shader_from_file(path, "HSMain", macro);
+            }
+            if (flags & ShaderFlags::S_DOMAIN) {
+                s->set_ds_shader_from_file(path, "DSMain", macro);
+            }
+            if (flags & ShaderFlags::S_GEOMETRY) {
+                s->set_gs_shader_from_file(path, "GSMain", macro);
+            }
+            if (flags & ShaderFlags::S_PIXEL) {
+                s->set_ps_shader_from_file(path, "PSMain", macro);
+            }
+            to_be_added = s;
+        }
+        shaders_[path] = to_be_added;
+        return to_be_added;
+    }
+
+    ComputeShader* add_compute_shader(const std::string&, D3D_SHADER_MACRO* macro = nullptr);
 
     Shader* get_shader(const std::string& shader);
 

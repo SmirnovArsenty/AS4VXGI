@@ -26,12 +26,12 @@ set(group_render_resource
     render/resource/resource_manager.cpp
     render/resource/resource_manager.h
 
-    render/resource/buffer.cpp
+    # render/resource/buffer.cpp
     render/resource/buffer.h
     render/resource/shader.cpp
     render/resource/shader.h
-    render/resource/shader_cache.cpp
-    render/resource/shader_cache.h
+    # render/resource/shader_cache.cpp
+    # render/resource/shader_cache.h
     render/resource/texture.cpp
     render/resource/texture.h
 )
@@ -44,8 +44,6 @@ set(group_render_scene
     render/scene/mesh.h
     render/scene/model.cpp
     render/scene/model.h
-    render/scene/particle_system.cpp
-    render/scene/particle_system.h
     render/scene/scene.cpp
     render/scene/scene.h
 )
@@ -98,6 +96,7 @@ source_group("component/common" FILES ${group_component_common})
 source_group("win32" FILES ${group_win32})
 
 add_library(framework STATIC ${sources})
+set_target_properties(framework PROPERTIES CXX_STANDARD 17)
 target_link_libraries(framework
     assimp
     directxtk

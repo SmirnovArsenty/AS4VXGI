@@ -4,10 +4,18 @@
 #include <wrl.h>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <d3dcompiler.h>
+
+#include "render/resource/buffer.h"
 
 class Shader
 {
+protected:
+    std::unordered_map<uint32_t, Buffer*> buffers_{}; // bind slot / buffer pointer (b- slots)
+    std::unordered_map<uint32_t, Buffer*> resources_{}; // bind slot / shader resource pointer (t- slots)
+    /// TODO // samplers (s- slots)
+    /// TODO // UAV (u- slots)
 public:
     Shader() = default;
     virtual ~Shader() = default;
@@ -15,11 +23,26 @@ public:
     virtual void set_name(const std::string&) = 0;
     virtual void use() = 0;
     virtual void destroy() = 0;
+
+    inline void attach_buffer(uint32_t bind_slot, Buffer* buffer)
+    {
+        assert(buffers_.find(bind_slot) == buffers_.end());
+        buffers_[bind_slot] = buffer;
+    }
+
+    inline void attach_resource(uint32_t bind_slot, Buffer* buffer)
+    {
+        assert(resources_.find(bind_slot) == resources_.end());
+        resources_[bind_slot] = buffer;
+    }
 };
 
 class GraphicsShader : public Shader
 {
 private:
+    Buffer* index_buffer_{ nullptr };
+    Buffer* vertex_buffer_{ nullptr };
+
     ID3D11InputLayout* input_layout_{ nullptr };
     ID3D11VertexShader* vertex_shader_{ nullptr };
     ID3DBlob* vertex_bc_{ nullptr };
@@ -39,7 +62,27 @@ public:
 
     void set_input_layout(D3D11_INPUT_ELEMENT_DESC*, size_t);
 
+    inline void attach_index_buffer(Buffer* index_buffer)
+    {
+        assert(index_buffer_ == nullptr);
+        index_buffer_ = index_buffer;
+    }
+
+    inline void attach_vertex_buffer(Buffer* vertex_buffer)
+    {
+        assert(vertex_buffer_ == nullptr);
+        vertex_buffer_ = vertex_buffer;
+    }
+
     void set_vs_shader_from_file(const std::string& filename,
+                                 const std::string& entrypoint,
+                                 D3D_SHADER_MACRO* macro = nullptr,
+                                 ID3DInclude* include = D3D_COMPILE_STANDARD_FILE_INCLUDE);
+    void set_ds_shader_from_file(const std::string& filename,
+                                 const std::string& entrypoint,
+                                 D3D_SHADER_MACRO* macro = nullptr,
+                                 ID3DInclude* include = D3D_COMPILE_STANDARD_FILE_INCLUDE);
+    void set_hs_shader_from_file(const std::string& filename,
                                  const std::string& entrypoint,
                                  D3D_SHADER_MACRO* macro = nullptr,
                                  ID3DInclude* include = D3D_COMPILE_STANDARD_FILE_INCLUDE);
