@@ -5,159 +5,69 @@
 
 #include <cassert>
 
-Buffer::Buffer()
-{
-}
-
-Buffer::~Buffer()
+void IndexBuffer::initialize_internal(const void* data, size_t count)
 {
     assert(resource_ == nullptr);
+    D3D11_BUFFER_DESC buffer_desc;
+    buffer_desc.Usage = D3D11_USAGE_DEFAULT;
+    buffer_desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+    buffer_desc.CPUAccessFlags = 0;
+    buffer_desc.MiscFlags = 0;
+    buffer_desc.StructureByteStride = 0;
+    buffer_desc.ByteWidth = static_cast<UINT>(count);
+
+    D3D11_SUBRESOURCE_DATA subresource_data;
+    subresource_data.pSysMem = data;
+    subresource_data.SysMemPitch = 0;
+    subresource_data.SysMemSlicePitch = 0;
+
+    auto device = Game::inst()->render().device();
+    D3D11_CHECK(device->CreateBuffer(&buffer_desc, &subresource_data, &resource_));
 }
 
-void Buffer::initialize(D3D11_BIND_FLAG bind_flags, void* data, UINT stride, UINT count, D3D11_USAGE usage, D3D11_CPU_ACCESS_FLAG cpu_access, D3D11_RESOURCE_MISC_FLAG misc)
+void IndexBuffer::initialize(const uint32_t* data, size_t count)
+{
+    format_ = DXGI_FORMAT_R32_UINT;
+    initialize_internal(data, count);
+}
+
+void IndexBuffer::initialize(const uint16_t* data, size_t count)
+{
+    format_ = DXGI_FORMAT_R16_UINT;
+    initialize_internal(data, count);
+}
+
+void IndexBuffer::bind()
+{
+    auto context = Game::inst()->render().context();
+    context->IASetIndexBuffer(resource_, format_, 0);
+}
+
+void VertexBuffer::initialize(const void* data, size_t count, size_t stride)
 {
     assert(resource_ == nullptr);
-    if (bind_flags == D3D11_BIND_CONSTANT_BUFFER) {
-        throw std::exception("Use ConstBuffer to create D3D11_BIND_CONSTANT_BUFFER");
-    }
+    stride_ = static_cast<UINT>(stride);
 
-    strides_.push_back(stride);
-    offsets_.push_back(0); /// TODO: handle offsets
+    D3D11_BUFFER_DESC buffer_desc;
+    buffer_desc.Usage = D3D11_USAGE_DEFAULT;
+    buffer_desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    buffer_desc.CPUAccessFlags = 0;
+    buffer_desc.MiscFlags = 0;
+    buffer_desc.StructureByteStride = 0;
+    buffer_desc.ByteWidth = stride_ * static_cast<UINT>(count);
 
-    if (bind_flags == D3D11_BIND_INDEX_BUFFER && stride < 2) { // invalid input
-        assert(false);
-    }
-
-    buffer_desc_.Usage = usage;
-    buffer_desc_.BindFlags = bind_flags;
-    buffer_desc_.CPUAccessFlags = cpu_access;
-    buffer_desc_.MiscFlags = misc;
-    buffer_desc_.StructureByteStride = misc == D3D11_RESOURCE_MISC_BUFFER_STRUCTURED ? stride : 0;
-    buffer_desc_.ByteWidth = stride * count;
-
-    subresource_data_.pSysMem = data;
-    subresource_data_.SysMemPitch = 0;
-    subresource_data_.SysMemSlicePitch = 0;
+    D3D11_SUBRESOURCE_DATA subresource_data;
+    subresource_data.pSysMem = data;
+    subresource_data.SysMemPitch = 0;
+    subresource_data.SysMemSlicePitch = 0;
 
     auto device = Game::inst()->render().device();
-    D3D11_CHECK(device->CreateBuffer(&buffer_desc_, &subresource_data_, &resource_));
-
-    // create shader resource view
-    if (bind_flags == D3D11_BIND_SHADER_RESOURCE)
-    {
-        D3D11_SHADER_RESOURCE_VIEW_DESC resource_view_desc;
-        resource_view_desc.BufferEx.FirstElement = 0;
-        resource_view_desc.BufferEx.NumElements = count;
-        resource_view_desc.BufferEx.Flags = 0;
-        resource_view_desc.Format = DXGI_FORMAT_UNKNOWN;
-        resource_view_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
-        D3D11_CHECK(device->CreateShaderResourceView(resource_, &resource_view_desc, &resource_view_));
-    }
+    D3D11_CHECK(device->CreateBuffer(&buffer_desc, &subresource_data, &resource_));
 }
 
-void Buffer::set_name(const std::string& name)
-{
-    assert(resource_ != nullptr);
-    resource_->SetPrivateData(WKPDID_D3DDebugObjectName, UINT(name.size()), name.c_str());
-}
-
-void Buffer::bind(UINT slot)
-{
-    assert(resource_ != nullptr);
-    auto context = Game::inst()->render().context();
-
-    if (buffer_desc_.BindFlags == D3D11_BIND_VERTEX_BUFFER)
-    {
-        context->IASetVertexBuffers(slot, 1, &resource_, strides_.data(), offsets_.data());
-    }
-    else if (buffer_desc_.BindFlags == D3D11_BIND_INDEX_BUFFER)
-    {
-        if (strides_[0] == sizeof(uint16_t)) {
-            context->IASetIndexBuffer(resource_, DXGI_FORMAT_R16_UINT, 0);
-        } else if (strides_[0] == sizeof(uint32_t)) {
-            context->IASetIndexBuffer(resource_, DXGI_FORMAT_R32_UINT, 0);
-        }
-    }
-    else if (buffer_desc_.BindFlags == D3D11_BIND_CONSTANT_BUFFER)
-    {
-        context->VSSetConstantBuffers(slot, 1, &resource_);
-        context->PSSetConstantBuffers(slot, 1, &resource_);
-        context->GSSetConstantBuffers(slot, 1, &resource_);
-        context->CSSetConstantBuffers(slot, 1, &resource_);
-    }
-    else if (buffer_desc_.BindFlags == D3D11_BIND_SHADER_RESOURCE)
-    {
-        context->VSSetShaderResources(slot, 1, &resource_view_);
-        context->PSSetShaderResources(slot, 1, &resource_view_);
-        context->GSSetShaderResources(slot, 1, &resource_view_);
-        context->CSSetShaderResources(slot, 1, &resource_view_);
-    }
-}
-
-void Buffer::destroy()
-{
-    SAFE_RELEASE(resource_);
-    SAFE_RELEASE(resource_view_);
-}
-
-UINT Buffer::count() const
-{
-    return buffer_desc_.ByteWidth / strides_[0];
-}
-
-void ConstBuffer::initialize(UINT size, D3D11_USAGE usage, D3D11_CPU_ACCESS_FLAG cpu_access)
-{
-    buffer_desc_.Usage = usage;
-    buffer_desc_.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-    buffer_desc_.CPUAccessFlags = cpu_access;
-    buffer_desc_.MiscFlags = 0;
-    buffer_desc_.StructureByteStride = 0;
-    buffer_desc_.ByteWidth = size;
-    assert(size >= 16);
-
-    auto device = Game::inst()->render().device();
-    D3D11_CHECK(device->CreateBuffer(&buffer_desc_, nullptr, &resource_));
-}
-
-void ConstBuffer::update_data(void* data)
+void VertexBuffer::bind(UINT slot)
 {
     auto context = Game::inst()->render().context();
-    D3D11_MAPPED_SUBRESOURCE mss;
-    context->Map(resource_, 0, D3D11_MAP_WRITE_DISCARD, 0, &mss);
-    memcpy(mss.pData, data, buffer_desc_.ByteWidth);
-    context->Unmap(resource_, 0);
-}
-
-void StructuredBuffer::initialize(D3D11_BIND_FLAG bind_flags, void* data, UINT stride, UINT count, D3D11_USAGE usage, D3D11_CPU_ACCESS_FLAG cpu_access)
-{
-    buffer_desc_.Usage = usage;
-    buffer_desc_.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-    buffer_desc_.CPUAccessFlags = cpu_access;
-    buffer_desc_.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-    buffer_desc_.StructureByteStride = stride;
-    buffer_desc_.ByteWidth = stride * count;
-
-    subresource_data_.pSysMem = data;
-    subresource_data_.SysMemPitch = 0;
-    subresource_data_.SysMemSlicePitch = 0;
-
-    auto device = Game::inst()->render().device();
-    D3D11_CHECK(device->CreateBuffer(&buffer_desc_, &subresource_data_, &resource_));
-
-    D3D11_SHADER_RESOURCE_VIEW_DESC resource_view_desc;
-    resource_view_desc.BufferEx.FirstElement = 0;
-    resource_view_desc.BufferEx.NumElements = count;
-    resource_view_desc.BufferEx.Flags = 0;
-    resource_view_desc.Format = DXGI_FORMAT_UNKNOWN;
-    resource_view_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
-    D3D11_CHECK(device->CreateShaderResourceView(resource_, &resource_view_desc, &resource_view_));
-}
-
-void StructuredBuffer::update_data(void* data)
-{
-    auto context = Game::inst()->render().context();
-    D3D11_MAPPED_SUBRESOURCE mss;
-    context->Map(resource_, 0, D3D11_MAP_WRITE_DISCARD, 0, &mss);
-    memcpy(mss.pData, data, buffer_desc_.ByteWidth);
-    context->Unmap(resource_, 0);
+    UINT offsets{ 0 };
+    context->IASetVertexBuffers(slot, 1U, &resource_, &stride_, &offsets);
 }

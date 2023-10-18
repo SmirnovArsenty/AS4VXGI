@@ -3,6 +3,7 @@
 #include <d3d11.h>
 #include <vector>
 #include <string>
+#include <cstdint>
 #include <cassert>
 
 #include "render/d3d11_common.h"
@@ -50,6 +51,7 @@ public:
     ConstBuffer() = default;
     void initialize(T* data)
     {
+        static_assert((sizeof(T) & 0x0F) == 0);
         D3D11_BUFFER_DESC buffer_desc{};
         buffer_desc.Usage = D3D11_USAGE_DEFAULT;
         buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
@@ -76,6 +78,7 @@ public:
 
     void initialize(T* data)
     {
+        static_assert((sizeof(T) & 0x0F) == 0);
         D3D11_BUFFER_DESC buffer_desc{};
         buffer_desc.Usage = D3D11_USAGE_DYNAMIC;
         buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
@@ -138,89 +141,29 @@ public:
     }
 };
 
-template<class T>
 class IndexBuffer : public Buffer
 {
+private:
+    DXGI_FORMAT format_{ DXGI_FORMAT_UNKNOWN };
+
+    void initialize_internal(const void* data, size_t count);
 public:
-    const T buffer_type;
+    IndexBuffer() = default;
 
-    IndexBuffer()
-    {
-        static_assert(std::is_same<T, uint16_t>() || std::is_same<T, uint32_t>());
-    };
+    void initialize(const uint32_t* data, size_t count);
 
-    void initialize(T* data, uint32_t count)
-    {
-        D3D11_BUFFER_DESC buffer_desc;
-        buffer_desc.Usage = D3D11_USAGE_DYNAMIC;
-        buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-        buffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-        buffer_desc.MiscFlags = 0;
-        buffer_desc.StructureByteStride = 0;
-        buffer_desc.ByteWidth = count;
+    void initialize(const uint16_t* data, size_t count);
 
-        D3D11_SUBRESOURCE_DATA subresource_data;
-        subresource_data.pSysMem = data;
-        subresource_data.SysMemPitch = 0;
-        subresource_data.SysMemSlicePitch = 0;
-
-        auto device = Game::inst()->render().device();
-        D3D11_CHECK(device->CreateBuffer(&buffer_desc, &subresource_data, &resource_));
-    }
-
-    void initialize(T* data, size_t count)
-    {
-        initialize(data, static_cast<uint32_t>(count));
-    }
-
-    void bind()
-    {
-        auto context = Game::inst()->render().context();
-        if (std::is_same<T, uint16_t>()) {
-            context->IASetIndexBuffer(resource_, DXGI_FORMAT_R16_UINT, 0);
-        } else if (std::is_same<T, uint32_t>()) {
-            context->IASetIndexBuffer(resource_, DXGI_FORMAT_R32_UINT, 0);
-        }
-    }
+    void bind();
 };
 
-template<class T>
 class VertexBuffer : public Buffer
 {
+    UINT stride_{ 0U };
 public:
-    const T buffer_type;
-
     VertexBuffer() = default;
 
-    void initialize(T* data, uint32_t count)
-    {
-        D3D11_BUFFER_DESC buffer_desc;
-        buffer_desc.Usage = D3D11_USAGE_DEFAULT;
-        buffer_desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-        buffer_desc.CPUAccessFlags = 0;
-        buffer_desc.MiscFlags = 0;
-        buffer_desc.StructureByteStride = 0;
-        buffer_desc.ByteWidth = sizeof(T) * count;
+    void initialize(const void* data, size_t count, size_t stride);
 
-        D3D11_SUBRESOURCE_DATA subresource_data;
-        subresource_data.pSysMem = data;
-        subresource_data.SysMemPitch = 0;
-        subresource_data.SysMemSlicePitch = 0;
-
-        auto device = Game::inst()->render().device();
-        D3D11_CHECK(device->CreateBuffer(&buffer_desc, &subresource_data, &resource_));
-    }
-
-    void initialize(T* data, size_t count)
-    {
-        initialize(data, static_cast<uint32_t>(count));
-    }
-
-    void bind(UINT slot)
-    {
-        auto context = Game::inst()->render().context();
-        UINT strides{ sizeof(T) };
-        UINT offsets{ 0 };
-        context->IASetVertexBuffers(slot, 1U, &resource_, &strides, &offsets);
-    }
+    void bind(UINT slot);
 };

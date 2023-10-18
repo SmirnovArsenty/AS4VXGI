@@ -1,8 +1,7 @@
 #pragma once
 
 #include "component/game_component.h"
-
-class Model;
+#include "math/model_tree.h"
 
 class AS4VXGI_Component final : public GameComponent
 {
@@ -17,5 +16,5 @@ public:
     void update() override;
     void destroy_resources() override;
 private:
-    
+    std::vector<ModelTree> model_trees_;
 };

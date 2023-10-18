@@ -2,7 +2,9 @@
 
 void AS4VXGI_Component::initialize()
 {
-
+    model_trees_.push_back({});
+    ModelTree& model = model_trees_.back();
+    model.load("./resources/models/suzanne.fbx");
 }
 
 void AS4VXGI_Component::draw()

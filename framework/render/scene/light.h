@@ -131,8 +131,8 @@ private:
 
     std::vector<Vector3> vertices_;
     std::vector<uint32_t> indices_;
-    VertexBuffer<Vector3> vertex_buffer_;
-    IndexBuffer<uint32_t> index_buffer_;
+    VertexBuffer vertex_buffer_;
+    IndexBuffer index_buffer_;
 
     ID3D11RasterizerState* rasterizer_state_{ nullptr };
 

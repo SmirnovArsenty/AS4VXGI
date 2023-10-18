@@ -40,8 +40,8 @@ public:
 class GraphicsShader : public Shader
 {
 private:
-    Buffer* index_buffer_{ nullptr };
-    Buffer* vertex_buffer_{ nullptr };
+    IndexBuffer* index_buffer_{ nullptr };
+    VertexBuffer* vertex_buffer_{ nullptr };
 
     ID3D11InputLayout* input_layout_{ nullptr };
     ID3D11VertexShader* vertex_shader_{ nullptr };
@@ -62,13 +62,13 @@ public:
 
     void set_input_layout(D3D11_INPUT_ELEMENT_DESC*, size_t);
 
-    inline void attach_index_buffer(Buffer* index_buffer)
+    inline void attach_index_buffer(IndexBuffer* index_buffer)
     {
         assert(index_buffer_ == nullptr);
         index_buffer_ = index_buffer;
     }
 
-    inline void attach_vertex_buffer(Buffer* vertex_buffer)
+    inline void attach_vertex_buffer(VertexBuffer* vertex_buffer)
     {
         assert(vertex_buffer_ == nullptr);
         vertex_buffer_ = vertex_buffer;

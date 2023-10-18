@@ -350,13 +350,10 @@ void GraphicsShader::use()
     auto context = Game::inst()->render().context();
     context->IASetInputLayout(input_layout_);
     if (index_buffer_ != nullptr) {
-        static_cast<IndexBuffer<uint32_t>*>(index_buffer_)->bind();
+        index_buffer_->bind();
     }
     if (vertex_buffer_ != nullptr) {
-        UINT offsets = 0;
-        context->IASetVertexBuffers(0, 1, &vertex_buffer_->getBuffer(),
-                                    &static_cast<VertexBuffer<uint32_t>*>(vertex_buffer_)->buffer_type,
-                                    &offsets);
+        vertex_buffer_->bind(0U);
     }
     context->VSSetShader(vertex_shader_, nullptr, 0);
     context->HSSetShader(hull_shader_, nullptr, 0);

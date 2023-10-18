@@ -18,7 +18,7 @@ Mesh::~Mesh()
 
 void Mesh::initialize()
 {
-    vertex_buffer_.initialize(vertices_.data(), vertices_.size());
+    vertex_buffer_.initialize(vertices_.data(), vertices_.size(), sizeof(vertices_[0]));
     index_buffer_.initialize(indices_.data(), indices_.size());
 #ifndef NDEBUG
     vertex_buffer_.set_name("vertex_buffer");
