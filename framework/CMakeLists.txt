@@ -37,15 +37,15 @@ set(group_render_resource
 )
 
 set(group_render_scene
-    render/scene/light.h
-    render/scene/material.cpp
-    render/scene/material.h
-    render/scene/mesh.cpp
-    render/scene/mesh.h
-    render/scene/model.cpp
-    render/scene/model.h
-    render/scene/scene.cpp
-    render/scene/scene.h
+    # render/scene/light.h
+    # render/scene/material.cpp
+    # render/scene/material.h
+    # render/scene/mesh.cpp
+    # render/scene/mesh.h
+    # render/scene/model.cpp
+    # render/scene/model.h
+    # render/scene/scene.cpp
+    # render/scene/scene.h
 )
 
 set(group_render_scene_lights
@@ -104,6 +104,7 @@ target_link_libraries(framework
 )
 target_include_directories(framework
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. # to include shaders
 )
 add_custom_command(TARGET framework POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:assimp> ${CMAKE_CURRENT_SOURCE_DIR}/..)

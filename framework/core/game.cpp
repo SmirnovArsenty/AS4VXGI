@@ -4,7 +4,7 @@
 #include "win32/input.h"
 #include "render/render.h"
 #include "render/annotation.h"
-#include "render/scene/scene.h"
+// #include "render/scene/scene.h"
 #include "render/camera.h"
 #include "component/game_component.h"
 
@@ -12,7 +12,7 @@ Game::Game()
 {
     win_ = std::make_unique<Win>();
     render_ = std::make_unique<Render>();
-    scene_ = std::make_unique<Scene>();
+    // scene_ = std::make_unique<Scene>();
 }
 
 // static
@@ -44,7 +44,7 @@ bool Game::initialize(uint32_t w, uint32_t h)
     }
 
     // initialize after game components
-    scene_->initialize();
+    // scene_->initialize();
 
     animating_ = true; // initialized
     return animating_;
@@ -76,7 +76,7 @@ void Game::run()
             }
 
             { // update components
-                scene_->update();
+                // scene_->update();
                 for (auto game_component : game_components_)
                 {
                     game_component->update();
@@ -85,7 +85,7 @@ void Game::run()
 
             {
                 Annotation annotation("draw scene");
-                scene_->draw();
+                // scene_->draw();
                 // for (auto game_component : game_components_)
                 // {
                 //     game_component->draw();
@@ -140,7 +140,7 @@ void Game::run()
 
 void Game::destroy()
 {
-    scene_->destroy();
+    // scene_->destroy();
 
     for (auto game_component : game_components_)
     {
@@ -188,7 +188,7 @@ const Render& Game::render() const
     return *render_;
 }
 
-Scene& Game::scene() const
-{
-    return *scene_;
-}
+// Scene& Game::scene() const
+// {
+//     return *scene_;
+// }

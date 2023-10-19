@@ -4,6 +4,9 @@
 #include <SimpleMath.h>
 using namespace DirectX::SimpleMath;
 
+#include "render/resource/buffer.h"
+#include "shaders/common/types.fx"
+
 class Camera
 {
 public:
@@ -15,6 +18,13 @@ public:
 
     Camera();
     ~Camera();
+
+    void initialize();
+    void destroy();
+    void update();
+
+    // always bind to register(b0)
+    void bind();
 
     float get_near() const;
     float get_far() const;
@@ -49,8 +59,11 @@ public:
     void move_up(float delta);
 
 private:
-    Vector3 position_{ -20.f, 0.f, 0.f };
-    Vector3 forward_{ 1.f, 0.f, 0.f };
+    bool durty_{ true };
+
+    CameraData camera_data_;
+    DynamicBuffer<CameraData> dynamic_camera_buffer_;
+
     CameraType type_{ CameraType::perspective };
     bool focus_{ false };
     Vector3 focus_target_{ 0.f, 0.f, 0.f };

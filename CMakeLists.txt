@@ -26,6 +26,7 @@ set(as4vxgi_sources
 add_executable(as4vxgi WIN32 ${as4vxgi_sources})
 set_target_properties(as4vxgi PROPERTIES CXX_STANDARD 17)
 target_include_directories(as4vxgi
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/framework)
 target_link_libraries(as4vxgi

@@ -5,6 +5,7 @@
 
 #include "core/game.h"
 #include "render/render.h"
+#include "render/camera.h"
 #include "model_tree.h"
 
 const uint32_t ModelTree::Mesh::invalid_material_id = 0xFFFFFFFF;
@@ -46,15 +47,49 @@ void ModelTree::load(const std::string& file)
     meshes_.reserve(scene->mNumMeshes);
     load_node(scene->mRootNode, scene);
 
+    albedo_shader_.set_vs_shader_from_file("./resources/shaders/debug/albedo.hlsl", "VSMain");
+    albedo_shader_.set_ps_shader_from_file("./resources/shaders/debug/albedo.hlsl", "PSMain");
+    D3D11_INPUT_ELEMENT_DESC inputs[] =
+    {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD_U", 0, DXGI_FORMAT_R32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD_V", 0, DXGI_FORMAT_R32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    };
+    albedo_shader_.set_input_layout(inputs, std::size(inputs));
+
     // build tree based on extents_
+
+    // initialize GPU buffers
+    if constexpr (sizeof(dynamic_model_data_) != 0) {
+        dynamic_model_buffer_.initialize(&dynamic_model_data_);
+    }
+
+    // if constexpr (sizeof(const_model_data_) != 0) {
+    //     const_model_buffer_.initialize(&const_model_data_);
+    // }
 }
 
 void ModelTree::unload()
 {
+    if constexpr (sizeof(dynamic_model_data_) != 0) {
+        dynamic_model_buffer_.destroy();
+    }
+
+    // if constexpr (sizeof(const_model_data_) != 0) {
+    //     const_model_buffer_.destroy();
+    // }
+
     for (auto& mesh : meshes_) {
         mesh.destroy();
     }
     meshes_.clear();
+
+}
+
+void ModelTree::draw(Camera* camera)
+{
+
 }
 
 void ModelTree::load_node(aiNode* node, const aiScene* scene)
@@ -146,7 +181,7 @@ void ModelTree::load_mesh(aiMesh* mesh, const aiScene* scene)
     // }
 
     {
-        meshes_.push_back(Mesh());
+        meshes_.push_back({});
         meshes_.back().initialize(mesh->mMaterialIndex, indices, vertices);
     }
 }

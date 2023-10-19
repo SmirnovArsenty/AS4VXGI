@@ -9,6 +9,11 @@
 #include "render/resource/texture.h"
 #include "render/resource/shader.h"
 
+#include "SimpleMath.h"
+using namespace DirectX::SimpleMath;
+
+class Camera;
+
 class ModelTree
 {
 public:
@@ -21,6 +26,8 @@ public:
 
     // destroy resources
     void unload();
+
+    void draw(Camera* camera);
 private:
     class Material
     {
@@ -70,4 +77,17 @@ private:
     std::vector<Mesh> meshes_;
 
     std::unordered_map<uint32_t, Material> materials_;
+
+    // struct {
+    //     uint32_t dummy[4];
+    // } const_model_data_;
+    // ConstBuffer<decltype(const_model_data_)> const_model_buffer_;
+
+    struct {
+        Matrix transform;
+        Matrix inverse_transpose_transform;
+    } dynamic_model_data_;
+    DynamicBuffer<decltype(dynamic_model_data_)> dynamic_model_buffer_;
+
+    GraphicsShader albedo_shader_;
 };

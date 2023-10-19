@@ -47,11 +47,9 @@ public:
 template<class T>
 class ConstBuffer : public Buffer
 {
-public:
-    ConstBuffer() = default;
-    void initialize(T* data)
+private:
+    void internal_initialize(T* data)
     {
-        static_assert((sizeof(T) & 0x0F) == 0);
         D3D11_BUFFER_DESC buffer_desc{};
         buffer_desc.Usage = D3D11_USAGE_DEFAULT;
         buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
@@ -68,6 +66,22 @@ public:
         auto device = Game::inst()->render().device();
         D3D11_CHECK(device->CreateBuffer(&buffer_desc_, &subresource_data, &resource_));
     }
+public:
+    ConstBuffer() = default;
+
+    void initialize(T* data)
+    {
+        assert(resource_ == nullptr);
+        static_assert((sizeof(T) & 0x0F) == 0);
+        internal_initialize(data);
+    }
+
+    // void recreate(T* data) // recreate
+    // {
+    //     assert(resource_ != nullptr);
+    //     resource_->Release();
+    //     internal_initialize(data);
+    // }
 };
 
 template<class T>
