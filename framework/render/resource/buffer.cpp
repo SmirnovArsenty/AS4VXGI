@@ -5,7 +5,7 @@
 
 #include <cassert>
 
-void IndexBuffer::initialize_internal(const void* data, size_t count)
+void IndexBuffer::initialize_internal(const void* data, size_t count, size_t sizeof_data)
 {
     assert(resource_ == nullptr);
     D3D11_BUFFER_DESC buffer_desc;
@@ -14,7 +14,7 @@ void IndexBuffer::initialize_internal(const void* data, size_t count)
     buffer_desc.CPUAccessFlags = 0;
     buffer_desc.MiscFlags = 0;
     buffer_desc.StructureByteStride = 0;
-    buffer_desc.ByteWidth = static_cast<UINT>(count);
+    buffer_desc.ByteWidth = static_cast<UINT>(count * sizeof_data);
 
     D3D11_SUBRESOURCE_DATA subresource_data;
     subresource_data.pSysMem = data;
@@ -28,13 +28,13 @@ void IndexBuffer::initialize_internal(const void* data, size_t count)
 void IndexBuffer::initialize(const uint32_t* data, size_t count)
 {
     format_ = DXGI_FORMAT_R32_UINT;
-    initialize_internal(data, count);
+    initialize_internal(data, count, sizeof(uint32_t));
 }
 
 void IndexBuffer::initialize(const uint16_t* data, size_t count)
 {
     format_ = DXGI_FORMAT_R16_UINT;
-    initialize_internal(data, count);
+    initialize_internal(data, count, sizeof(uint16_t));
 }
 
 void IndexBuffer::bind()

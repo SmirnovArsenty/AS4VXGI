@@ -65,7 +65,7 @@ private:
     DynamicBuffer<CameraData> dynamic_camera_buffer_;
 
     CameraType type_{ CameraType::perspective };
-    bool focus_{ false };
+    bool focus_{ true };
     Vector3 focus_target_{ 0.f, 0.f, 0.f };
     float focus_min_distance_{ 0.f };
     float focus_distance_{ 0.f };

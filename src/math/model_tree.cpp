@@ -30,12 +30,11 @@ void ModelTree::Mesh::destroy()
 
 void ModelTree::Mesh::draw()
 {
-    // shader must be setup
-
     index_buffer_.bind();
     vertex_buffer_.bind(0U);
 
     auto context = Game::inst()->render().context();
+    context->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     context->DrawIndexed(index_count_, 0, 0);
 }
 
@@ -53,17 +52,34 @@ void ModelTree::load(const std::string& file)
     {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         { "TEXCOORD_U", 0, DXGI_FORMAT_R32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD_V", 0, DXGI_FORMAT_R32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD_V", 0, DXGI_FORMAT_R32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
     };
     albedo_shader_.set_input_layout(inputs, std::size(inputs));
 
+    normal_shader_.set_vs_shader_from_file("./resources/shaders/debug/normal.hlsl", "VSMain");
+    normal_shader_.set_ps_shader_from_file("./resources/shaders/debug/normal.hlsl", "PSMain");
+    normal_shader_.set_input_layout(inputs, std::size(inputs));
+
+    auto device = Game::inst()->render().device();
+    CD3D11_RASTERIZER_DESC opaque_rast_desc = {};
+    opaque_rast_desc.CullMode = D3D11_CULL_BACK; // do not draw back-facing triangles
+    opaque_rast_desc.FillMode = D3D11_FILL_SOLID;
+    opaque_rast_desc.FrontCounterClockwise = true;
+    D3D11_CHECK(device->CreateRasterizerState(&opaque_rast_desc, &rasterizer_state_));
+
     // build tree based on extents_
+    /// TODO
 
     // initialize GPU buffers
+    dynamic_model_data_.transform = Matrix::Identity;
+    dynamic_model_data_.inverse_transpose_transform = Matrix::Identity;
     if constexpr (sizeof(dynamic_model_data_) != 0) {
         dynamic_model_buffer_.initialize(&dynamic_model_data_);
     }
+
+    albedo_shader_.attach_buffer(1U, &dynamic_model_buffer_);
+    normal_shader_.attach_buffer(1U, &dynamic_model_buffer_);
 
     // if constexpr (sizeof(const_model_data_) != 0) {
     //     const_model_buffer_.initialize(&const_model_data_);
@@ -72,6 +88,9 @@ void ModelTree::load(const std::string& file)
 
 void ModelTree::unload()
 {
+    rasterizer_state_->Release();
+    rasterizer_state_ = nullptr;
+
     if constexpr (sizeof(dynamic_model_data_) != 0) {
         dynamic_model_buffer_.destroy();
     }
@@ -80,6 +99,9 @@ void ModelTree::unload()
     //     const_model_buffer_.destroy();
     // }
 
+    albedo_shader_.destroy();
+    normal_shader_.destroy();
+
     for (auto& mesh : meshes_) {
         mesh.destroy();
     }
@@ -87,15 +109,28 @@ void ModelTree::unload()
 
 }
 
-void ModelTree::draw(Camera* camera)
+void ModelTree::update()
 {
 
+}
+
+void ModelTree::draw(Camera* camera)
+{
+    auto context = Game::inst()->render().context();
+    // albedo_shader_.use();
+    context->RSSetState(rasterizer_state_);
+
+    normal_shader_.use();
+    camera->bind();
+    for (auto& mesh : meshes_) {
+        mesh.draw();
+    }
 }
 
 void ModelTree::load_node(aiNode* node, const aiScene* scene)
 {
     for (uint32_t i = 0; i < node->mNumMeshes; ++i) {
-        auto mesh = scene->mMeshes[node->mMeshes[i]];
+        aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
         load_mesh(mesh, scene);
     }
 
@@ -123,9 +158,9 @@ void ModelTree::load_mesh(aiMesh* mesh, const aiScene* scene)
     // fill geom data
     vertices.reserve(mesh->mNumVertices);
     for (uint32_t i = 0; i < mesh->mNumVertices; ++i) {
-        vertices.push_back({mesh->mVertices[i],
-                            aiVector2D(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y),
-                            mesh->mNormals[i]});
+        vertices.push_back({ mesh->mVertices[i],
+                            {mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y},
+                            mesh->mNormals[i] });
 
         extendWithVertex(mesh->mVertices[i]);
     }

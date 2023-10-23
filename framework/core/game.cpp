@@ -86,10 +86,10 @@ void Game::run()
             {
                 Annotation annotation("draw scene");
                 // scene_->draw();
-                // for (auto game_component : game_components_)
-                // {
-                //     game_component->draw();
-                // }
+                for (auto game_component : game_components_)
+                {
+                    game_component->draw();
+                }
             }
 
             // Handle components imgui

@@ -112,6 +112,7 @@ public:
 
     void update(T* data)
     {
+        assert(resource_ != nullptr);
         auto context = Game::inst()->render().context();
         D3D11_MAPPED_SUBRESOURCE mss;
         context->Map(resource_, 0, D3D11_MAP_WRITE_DISCARD, 0, &mss);
@@ -160,7 +161,7 @@ class IndexBuffer : public Buffer
 private:
     DXGI_FORMAT format_{ DXGI_FORMAT_UNKNOWN };
 
-    void initialize_internal(const void* data, size_t count);
+    void initialize_internal(const void* data, size_t count, size_t sizeof_data);
 public:
     IndexBuffer() = default;
 

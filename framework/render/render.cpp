@@ -125,6 +125,7 @@ void Render::initialize()
     create_depth_stencil_texture_and_view();
 
     camera_ = new Camera();
+    camera_->initialize();
     // camera_->set_camera(Vector3(100.f), Vector3(0.f, 0.f, 1.f));
 
     // initialize debug annotations
@@ -204,6 +205,8 @@ void Render::prepare_frame()
             }
         }
     }
+    // update camera GPU resources
+    camera_->update();
 }
 
 void Render::prepare_resources() const
@@ -260,6 +263,7 @@ void Render::destroy_resources()
 
     user_defined_annotation_->Release();
 
+    camera_->destroy();
     delete camera_;
     camera_ = nullptr;
 

@@ -27,6 +27,8 @@ public:
     // destroy resources
     void unload();
 
+    void update();
+
     void draw(Camera* camera);
 private:
     class Material
@@ -45,7 +47,7 @@ private:
         struct Vertex
         {
             aiVector3D position;
-            aiVector2D texcoord;
+            aiVector2D uv;
             aiVector3D normal;
         };
 #pragma pack(pop)
@@ -89,5 +91,10 @@ private:
     } dynamic_model_data_;
     DynamicBuffer<decltype(dynamic_model_data_)> dynamic_model_buffer_;
 
+    // renderstate
+    ID3D11RasterizerState* rasterizer_state_{ nullptr };
+
+    // debug shaders
     GraphicsShader albedo_shader_;
+    GraphicsShader normal_shader_;
 };

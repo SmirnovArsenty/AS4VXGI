@@ -27,8 +27,8 @@ cbuffer ModelData : register(b1)
     float4x4 inverse_transpose_transform;
 };
 
-Texture2D<float4> albedo_tex : register(t0);
-SamplerState tex_sampler : register(s0);
+// Texture2D<float4> albedo_tex : register(t0);
+// SamplerState tex_sampler : register(s0);
 
 PS_IN VSMain(VS_IN input)
 {
@@ -47,7 +47,7 @@ PS_OUT PSMain(PS_IN input)
 {
     PS_OUT res = (PS_OUT)0;
 
-    res.color = (0.2).xxxx;
+    res.color = input.normal;
 
     // if (material_flags & 1) {
     //     albedo_color = albedo_tex.Sample(tex_sampler, input.uv);
