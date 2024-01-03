@@ -15,6 +15,8 @@ void ModelTree::Mesh::initialize(uint32_t material_id,
     const std::vector<ModelTree::Mesh::Vertex>& vertices)
 {
     material_id_ = material_id;
+    indices_ = indices;
+    vertices_ = vertices;
     index_count_ = static_cast<UINT>(indices.size());
     index_buffer_.initialize(indices.data(), indices.size());
     vertex_buffer_.initialize(vertices.data(), vertices.size(), sizeof(ModelTree::Mesh::Vertex));
@@ -36,6 +38,16 @@ void ModelTree::Mesh::draw()
     auto context = Game::inst()->render().context();
     context->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     context->DrawIndexed(index_count_, 0, 0);
+}
+
+const std::vector<uint32_t>& ModelTree::Mesh::get_indices() const
+{
+    return indices_;
+}
+
+const std::vector<ModelTree::Mesh::Vertex>& ModelTree::Mesh::get_vertices() const
+{
+    return vertices_;
 }
 
 void ModelTree::load(const std::string& file)
@@ -69,7 +81,11 @@ void ModelTree::load(const std::string& file)
     D3D11_CHECK(device->CreateRasterizerState(&opaque_rast_desc, &rasterizer_state_));
 
     // build tree based on extents_
-    /// TODO
+    std::vector<std::pair<uint32_t, std::vector<uint32_t>>> meshes;
+    for (uint32_t i = 0; i < meshes_.size(); ++i) {
+        meshes.push_back(std::make_pair(i, meshes_[i].get_indices()));
+    }
+    split_vertices(extents_, meshes, nullptr);
 
     // initialize GPU buffers
     dynamic_model_data_.transform = Matrix::Identity;
@@ -124,6 +140,246 @@ void ModelTree::draw(Camera* camera)
     camera->bind();
     for (auto& mesh : meshes_) {
         mesh.draw();
+    }
+}
+
+void ModelTree::split_vertices(std::pair<aiVector3D, aiVector3D> extents, const std::vector<std::pair<uint32_t, std::vector<uint32_t>>>& meshes, ModelTree::ModelTreeNode* node)
+{
+    constexpr float smallest_length = 0.5f;
+    if (node == nullptr) {
+        assert(root_ == nullptr);
+        root_ = new ModelTree::ModelTreeNode();
+        node = root_;
+    }
+    node->extents_ = extents;
+
+    const float x_length = extents.second.x - extents.first.x;
+    const float y_length = extents.second.y - extents.first.y;
+    const float z_length = extents.second.z - extents.first.z;
+    const float x_mean = (extents.second.x + extents.first.x) / 2;
+    const float y_mean = (extents.second.y + extents.first.y) / 2;
+    const float z_mean = (extents.second.z + extents.first.z) / 2;
+    bool split_x = false;
+    bool split_y = false;
+    bool split_z = false;
+    if (x_length > y_length && x_length > z_length && x_length > smallest_length) {
+        split_x = true;
+    } else if (y_length > x_length && y_length > z_length && y_length > smallest_length) {
+        split_y = true;
+    } else if (z_length > x_length && z_length > y_length && z_length > smallest_length) {
+        split_z = true;
+    }
+
+
+    std::vector<std::pair<uint32_t, std::vector<uint32_t>>> children_triangles[2];
+    for (int i = 0; i < meshes.size(); ++i) {
+        Mesh& mesh = meshes_[meshes[i].first];
+        const std::vector<uint32_t>& indices = meshes[i].second;
+        const std::vector<ModelTree::Mesh::Vertex>& vertices = mesh.get_vertices();
+        for (int j = 0; j < indices.size(); j += 3) {
+            aiVector3D triangle[3] = {
+                vertices[indices[j + 0]].position,
+                vertices[indices[j + 1]].position,
+                vertices[indices[j + 2]].position
+            };
+            if (split_x) {
+                if (triangle[0].x < x_mean && triangle[1].x < x_mean && triangle[2].x < x_mean) {
+                    size_t children_triangles_index = 0xFFFFFFFF;
+                    for (size_t index = 0; index < children_triangles[0].size(); ++index) { // try to find mesh entry
+                        if (children_triangles[0][index].first == meshes[i].first) {
+                            children_triangles_index = index;
+                        }
+                    }
+                    if (children_triangles_index == 0xFFFFFFFF) { // mesh entry not found, create new entry
+                        children_triangles_index = children_triangles[0].size();
+                        children_triangles[0].push_back({});
+                        children_triangles[0][children_triangles_index].first = meshes[i].first;
+                    }
+
+                    children_triangles[0][children_triangles_index].second.push_back(indices[j + 0]);
+                    children_triangles[0][children_triangles_index].second.push_back(indices[j + 1]);
+                    children_triangles[0][children_triangles_index].second.push_back(indices[j + 2]);
+                } else if (triangle[0].x > x_mean && triangle[1].x > x_mean && triangle[2].x > x_mean) {
+                    size_t children_triangles_index = 0xFFFFFFFF;
+                    for (size_t index = 0; index < children_triangles[1].size(); ++index) { // try to find mesh entry
+                        if (children_triangles[1][index].first == meshes[i].first) {
+                            children_triangles_index = index;
+                        }
+                    }
+                    if (children_triangles_index == 0xFFFFFFFF) { // mesh entry not found, create new entry
+                        children_triangles_index = children_triangles[1].size();
+                        children_triangles[1].push_back({});
+                        children_triangles[1][children_triangles_index].first = meshes[i].first;
+                    }
+
+                    children_triangles[1][children_triangles_index].second.push_back(indices[j + 0]);
+                    children_triangles[1][children_triangles_index].second.push_back(indices[j + 1]);
+                    children_triangles[1][children_triangles_index].second.push_back(indices[j + 2]);
+                } else {
+                    size_t children_triangles_index = 0xFFFFFFFF;
+                    for (size_t index = 0; index < node->meshes_.size(); ++index) { // try to find mesh entry
+                        if (node->meshes_[index].first == meshes[i].first) {
+                            children_triangles_index = index;
+                        }
+                    }
+                    if (children_triangles_index == 0xFFFFFFFF) { // mesh entry not found, create new entry
+                        children_triangles_index = node->meshes_.size();
+                        node->meshes_.push_back({});
+                        node->meshes_[children_triangles_index].first = meshes[i].first;
+                    }
+
+                    node->meshes_[children_triangles_index].second.push_back(indices[j + 0]);
+                    node->meshes_[children_triangles_index].second.push_back(indices[j + 1]);
+                    node->meshes_[children_triangles_index].second.push_back(indices[j + 2]);
+                }
+            } else if (split_y) {
+                if (triangle[0].y < x_mean && triangle[1].y < x_mean && triangle[2].y < x_mean) {
+                    size_t children_triangles_index = 0xFFFFFFFF;
+                    for (size_t index = 0; index < children_triangles[0].size(); ++index) { // try to find mesh entry
+                        if (children_triangles[0][index].first == meshes[i].first) {
+                            children_triangles_index = index;
+                        }
+                    }
+                    if (children_triangles_index == 0xFFFFFFFF) { // mesh entry not found, create new entry
+                        children_triangles_index = children_triangles[0].size();
+                        children_triangles[0].push_back({});
+                        children_triangles[0][children_triangles_index].first = meshes[i].first;
+                    }
+
+                    children_triangles[0][children_triangles_index].second.push_back(indices[j + 0]);
+                    children_triangles[0][children_triangles_index].second.push_back(indices[j + 1]);
+                    children_triangles[0][children_triangles_index].second.push_back(indices[j + 2]);
+                } else if (triangle[0].y > x_mean && triangle[1].y > x_mean && triangle[2].y > x_mean) {
+                    size_t children_triangles_index = 0xFFFFFFFF;
+                    for (size_t index = 0; index < children_triangles[1].size(); ++index) { // try to find mesh entry
+                        if (children_triangles[1][index].first == meshes[i].first) {
+                            children_triangles_index = index;
+                        }
+                    }
+                    if (children_triangles_index == 0xFFFFFFFF) { // mesh entry not found, create new entry
+                        children_triangles_index = children_triangles[1].size();
+                        children_triangles[1].push_back({});
+                        children_triangles[1][children_triangles_index].first = meshes[i].first;
+                    }
+
+                    children_triangles[1][children_triangles_index].second.push_back(indices[j + 0]);
+                    children_triangles[1][children_triangles_index].second.push_back(indices[j + 1]);
+                    children_triangles[1][children_triangles_index].second.push_back(indices[j + 2]);
+                } else {
+                    size_t children_triangles_index = 0xFFFFFFFF;
+                    for (size_t index = 0; index < node->meshes_.size(); ++index) { // try to find mesh entry
+                        if (node->meshes_[index].first == meshes[i].first) {
+                            children_triangles_index = index;
+                        }
+                    }
+                    if (children_triangles_index == 0xFFFFFFFF) { // mesh entry not found, create new entry
+                        children_triangles_index = node->meshes_.size();
+                        node->meshes_.push_back({});
+                        node->meshes_[children_triangles_index].first = meshes[i].first;
+                    }
+
+                    node->meshes_[children_triangles_index].second.push_back(indices[j + 0]);
+                    node->meshes_[children_triangles_index].second.push_back(indices[j + 1]);
+                    node->meshes_[children_triangles_index].second.push_back(indices[j + 2]);
+                }
+            } else if (split_z) {
+                if (triangle[0].z < x_mean && triangle[1].z < x_mean && triangle[2].z < x_mean) {
+                    size_t children_triangles_index = 0xFFFFFFFF;
+                    for (size_t index = 0; index < children_triangles[0].size(); ++index) { // try to find mesh entry
+                        if (children_triangles[0][index].first == meshes[i].first) {
+                            children_triangles_index = index;
+                        }
+                    }
+                    if (children_triangles_index == 0xFFFFFFFF) { // mesh entry not found, create new entry
+                        children_triangles_index = children_triangles[0].size();
+                        children_triangles[0].push_back({});
+                        children_triangles[0][children_triangles_index].first = meshes[i].first;
+                    }
+
+                    children_triangles[0][children_triangles_index].second.push_back(indices[j + 0]);
+                    children_triangles[0][children_triangles_index].second.push_back(indices[j + 1]);
+                    children_triangles[0][children_triangles_index].second.push_back(indices[j + 2]);
+                } else if (triangle[0].z > x_mean && triangle[1].z > x_mean && triangle[2].z > x_mean) {
+                    size_t children_triangles_index = 0xFFFFFFFF;
+                    for (size_t index = 0; index < children_triangles[1].size(); ++index) { // try to find mesh entry
+                        if (children_triangles[1][index].first == meshes[i].first) {
+                            children_triangles_index = index;
+                        }
+                    }
+                    if (children_triangles_index == 0xFFFFFFFF) { // mesh entry not found, create new entry
+                        children_triangles_index = children_triangles[1].size();
+                        children_triangles[1].push_back({});
+                        children_triangles[1][children_triangles_index].first = meshes[i].first;
+                    }
+
+                    children_triangles[1][children_triangles_index].second.push_back(indices[j + 0]);
+                    children_triangles[1][children_triangles_index].second.push_back(indices[j + 1]);
+                    children_triangles[1][children_triangles_index].second.push_back(indices[j + 2]);
+                } else {
+                    size_t children_triangles_index = 0xFFFFFFFF;
+                    for (size_t index = 0; index < node->meshes_.size(); ++index) { // try to find mesh entry
+                        if (node->meshes_[index].first == meshes[i].first) {
+                            children_triangles_index = index;
+                        }
+                    }
+                    if (children_triangles_index == 0xFFFFFFFF) { // mesh entry not found, create new entry
+                        children_triangles_index = node->meshes_.size();
+                        node->meshes_.push_back({});
+                        node->meshes_[children_triangles_index].first = meshes[i].first;
+                    }
+
+                    node->meshes_[children_triangles_index].second.push_back(indices[j + 0]);
+                    node->meshes_[children_triangles_index].second.push_back(indices[j + 1]);
+                    node->meshes_[children_triangles_index].second.push_back(indices[j + 2]);
+                }
+            } else { // just keep triangles without spliting
+                size_t children_triangles_index = 0xFFFFFFFF;
+                for (size_t index = 0; index < node->meshes_.size(); ++index) { // try to find mesh entry
+                    if (node->meshes_[index].first == meshes[i].first) {
+                        children_triangles_index = index;
+                    }
+                }
+                if (children_triangles_index == 0xFFFFFFFF) { // mesh entry not found, create new entry
+                    children_triangles_index = node->meshes_.size();
+                    node->meshes_.push_back({});
+                    node->meshes_[children_triangles_index].first = meshes[i].first;
+                }
+
+                node->meshes_[children_triangles_index].second.push_back(indices[j + 0]);
+                node->meshes_[children_triangles_index].second.push_back(indices[j + 1]);
+                node->meshes_[children_triangles_index].second.push_back(indices[j + 2]);
+            }
+        }
+    }
+
+    for (uint32_t i = 0; i < 2; ++i) {
+        if (children_triangles[i].size() != 0) {
+            node->children_[i] = new ModelTreeNode();
+            std::pair<aiVector3D, aiVector3D> child_extents = extents;
+            auto& [min, max] = child_extents;
+            if (split_x) {
+                if (i == 0) { // "<"
+                    max.x = x_mean;
+                } else { // ">"
+                    min.x = x_mean;
+                }
+            } else if (split_y) {
+                if (i == 0) { // "<"
+                    max.y = y_mean;
+                } else { // ">"
+                    min.y = y_mean;
+                }
+            } else if (split_z) { // otherwise split by z
+                if (i == 0) { // "<"
+                    max.z = z_mean;
+                } else { // ">"
+                    min.z = z_mean;
+                }
+            } else {
+                assert(false); // children_triangles must be empty if no split
+            }
+            split_vertices(child_extents, children_triangles[i], node->children_[i]);
+        }
     }
 }
 

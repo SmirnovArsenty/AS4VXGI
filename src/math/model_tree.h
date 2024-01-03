@@ -62,19 +62,36 @@ private:
         void destroy();
 
         void draw();
+
+        const std::vector<uint32_t>& get_indices() const;
+        const std::vector<Vertex>& get_vertices() const;
     private:
         static const uint32_t invalid_material_id;
         uint32_t material_id_ = invalid_material_id;
+
+        std::vector<uint32_t> indices_;
+        std::vector<Vertex> vertices_;
 
         UINT index_count_{ 0 };
         IndexBuffer index_buffer_;
         VertexBuffer vertex_buffer_;
     };
 
+    struct ModelTreeNode
+    {
+    public:
+        std::pair<aiVector3D, aiVector3D> extents_{ aiVector3D(FLT_MAX), aiVector3D(FLT_MIN) };
+        std::vector<std::pair<uint32_t, std::vector<uint32_t>>> meshes_; // pair: mesh index, mesh vertex indices
+        ModelTreeNode* children_[2]{ nullptr, nullptr };
+    };
+
+    void split_vertices(std::pair<aiVector3D, aiVector3D> extents, const std::vector<std::pair<uint32_t, std::vector<uint32_t>>>& meshes, ModelTreeNode* parent);
+
     void load_node(aiNode* node, const aiScene* scene);
     void load_mesh(aiMesh* mesh, const aiScene* scene);
 
-    std::pair<aiVector3D, aiVector3D> extents_{ aiVector3D(FLT_MAX), aiVector3D(FLT_MIN) };
+    std::pair<aiVector3D, aiVector3D> extents_; // global model extents
+    ModelTreeNode* root_{ nullptr };
 
     std::vector<Mesh> meshes_;
 
