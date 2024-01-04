@@ -44,6 +44,14 @@ private:
     {
     public:
 #pragma pack(push, 1)
+        struct MeshTreeNode
+        {
+            float min[3]{ FLT_MAX };
+            int32_t start_index;
+            float max[3]{ FLT_MIN };
+            int32_t count;
+        };
+
         struct Vertex
         {
             aiVector3D position;
@@ -57,17 +65,22 @@ private:
 
         void initialize(uint32_t material_id,
                         const std::vector<uint32_t>& indices,
-                        const std::vector<Vertex>& vertices);
+                        const std::vector<Vertex>& vertices,
+                        float min[3], float max[3]);
 
         void destroy();
 
         void draw();
-
-        const std::vector<uint32_t>& get_indices() const;
-        const std::vector<Vertex>& get_vertices() const;
+#ifndef NDEBUG
+        void debug_draw();
+#endif
     private:
-        static const uint32_t invalid_material_id;
+        static constexpr uint32_t invalid_material_id = 0xFFFFFFFF;
         uint32_t material_id_ = invalid_material_id;
+
+        // mesh extents
+        float min_[3];
+        float max_[3];
 
         std::vector<uint32_t> indices_;
         std::vector<Vertex> vertices_;
@@ -75,23 +88,21 @@ private:
         UINT index_count_{ 0 };
         IndexBuffer index_buffer_;
         VertexBuffer vertex_buffer_;
-    };
 
-    struct ModelTreeNode
-    {
-    public:
-        std::pair<aiVector3D, aiVector3D> extents_{ aiVector3D(FLT_MAX), aiVector3D(FLT_MIN) };
-        std::vector<std::pair<uint32_t, std::vector<uint32_t>>> meshes_; // pair: mesh index, mesh vertex indices
-        ModelTreeNode* children_[2]{ nullptr, nullptr };
-    };
+        std::vector<MeshTreeNode> mesh_tree_;
 
-    void split_vertices(std::pair<aiVector3D, aiVector3D> extents, const std::vector<std::pair<uint32_t, std::vector<uint32_t>>>& meshes, ModelTreeNode* parent);
+        void split_vertices(float min[3], float max[3], int32_t start, int32_t count);
+
+#ifndef NDEBUG
+        ShaderResource<Matrix> box_transformations_;
+        static GraphicsShader* box_shader_;
+        static IndexBuffer* box_index_buffer_;
+        static VertexBuffer* box_vertex_buffer_;
+#endif
+    };
 
     void load_node(aiNode* node, const aiScene* scene);
     void load_mesh(aiMesh* mesh, const aiScene* scene);
-
-    std::pair<aiVector3D, aiVector3D> extents_; // global model extents
-    ModelTreeNode* root_{ nullptr };
 
     std::vector<Mesh> meshes_;
 
