@@ -362,9 +362,8 @@ void GraphicsShader::use()
     context->PSSetShader(pixel_shader_, nullptr, 0);
     context->CSSetShader(nullptr, nullptr, 0);
 
-    for (auto& [slot, buffer] : buffers_)
-    {
-        ID3D11Buffer* resource = buffer->getBuffer();
+    for (auto& [slot, buffer] : buffers_) {
+        ID3D11Buffer*const& resource = buffer->getBuffer();
         context->VSSetConstantBuffers(slot, 1, &resource);
         context->HSSetConstantBuffers(slot, 1, &resource);
         context->DSSetConstantBuffers(slot, 1, &resource);
@@ -372,8 +371,7 @@ void GraphicsShader::use()
         context->PSSetConstantBuffers(slot, 1, &resource);
     }
 
-    for (auto& [slot, resource] : resources_)
-    {
+    for (auto& [slot, resource] : resources_) {
         ID3D11ShaderResourceView*const& srv = resource->getSRV();
         context->VSSetShaderResources(slot, 1, &srv);
         context->DSSetShaderResources(slot, 1, &srv);
@@ -495,14 +493,19 @@ void ComputeShader::use()
 
     for (auto& [slot, buffer]: buffers_)
     {
-        ID3D11Buffer* resource = buffer->getBuffer();
+        ID3D11Buffer*const& resource = buffer->getBuffer();
         context->CSSetConstantBuffers(slot, 1, &resource);
     }
 
     for (auto& [slot, resource] : resources_)
     {
-        ID3D11ShaderResourceView* srv = resource->getSRV();
+        ID3D11ShaderResourceView*const& srv = resource->getSRV();
         context->CSSetShaderResources(slot, 1, &srv);
+    }
+
+    for (auto& [slot, resource_] : uavs_) {
+        ID3D11UnorderedAccessView*const& uav = resource_->getUAV();
+        context->CSSetUnorderedAccessViews(slot, 1, &uav, nullptr);
     }
 }
 

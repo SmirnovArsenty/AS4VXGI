@@ -8,16 +8,16 @@ using namespace DirectX;
 #include "render/d3d11_common.h"
 #include "texture.h"
 
-Texture::Texture()
+Texture2D::Texture2D()
 {
 }
 
-Texture::~Texture()
+Texture2D::~Texture2D()
 {
     destroy(); // for default static material texture
 }
 
-void Texture::load(const std::string& path)
+void Texture2D::load(const std::string& path)
 {
     // load texture color
     assert(!path.empty());
@@ -31,7 +31,7 @@ void Texture::load(const std::string& path)
     assert(resource_view_ != nullptr);
 }
 
-void Texture::initialize(uint32_t width, uint32_t height, DXGI_FORMAT format, void* pixel_data, D3D11_BIND_FLAG bind_flag)
+void Texture2D::initialize(uint32_t width, uint32_t height, DXGI_FORMAT format, void* pixel_data, D3D11_BIND_FLAG bind_flag)
 {
     D3D11_TEXTURE2D_DESC desc;
     desc.Width = width;
@@ -94,7 +94,7 @@ void Texture::initialize(uint32_t width, uint32_t height, DXGI_FORMAT format, vo
     }
 }
 
-void Texture::destroy()
+void Texture2D::destroy()
 {
     if (texture_ != nullptr) {
         texture_->Release();
@@ -112,18 +112,18 @@ void Texture::destroy()
     }
 }
 
-void Texture::bind(UINT slot)
+void Texture2D::bind(UINT slot)
 {
     auto context = Game::inst()->render().context();
     context->PSSetShaderResources(slot, 1, &resource_view_);
 }
 
-ID3D11Resource* Texture::resource() const
+ID3D11Resource*const& Texture2D::resource() const
 {
-    return (ID3D11Resource*)texture_;
+    return texture_;
 }
 
-ID3D11ShaderResourceView* Texture::view() const
+ID3D11ShaderResourceView*const& Texture2D::view() const
 {
     return resource_view_;
 }

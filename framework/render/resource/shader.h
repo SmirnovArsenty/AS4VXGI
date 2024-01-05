@@ -9,13 +9,12 @@
 
 #include "render/resource/buffer.h"
 
-class Shader
+class Shader : public Resource
 {
 protected:
     std::unordered_map<uint32_t, Buffer*> buffers_{}; // bind slot / buffer pointer (b- slots)
     std::unordered_map<uint32_t, Buffer*> resources_{}; // bind slot / shader resource pointer (t- slots)
     /// TODO // samplers (s- slots)
-    /// TODO // UAV (u- slots)
 public:
     Shader() = default;
     virtual ~Shader() = default;
@@ -116,6 +115,8 @@ public:
 class ComputeShader : public Shader
 {
 private:
+    std::unordered_map<uint32_t, Buffer*> uavs_{}; // bind slot / UAV (u- slots)
+
     ID3D11ComputeShader* compute_shader_{ nullptr };
     ID3DBlob* compute_bc_{ nullptr };
 
@@ -134,6 +135,12 @@ public:
                                         const std::string& entrypoint,
                                         D3D_SHADER_MACRO* macro = nullptr,
                                         ID3DInclude* include = D3D_COMPILE_STANDARD_FILE_INCLUDE);
+
+    inline void attach_uav(uint32_t bind_slot, Buffer* buffer)
+    {
+        assert(uavs_.find(bind_slot) == uavs_.end());
+        uavs_[bind_slot] = buffer;
+    }
 
     void use() override;
 

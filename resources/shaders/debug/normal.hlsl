@@ -1,4 +1,5 @@
-#include "framework/shaders/common/registers.hlsl"
+#define CAMERA_REGISTER b0
+#include "framework/shaders/common/types.fx"
 
 struct VS_IN
 {

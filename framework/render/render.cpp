@@ -74,18 +74,31 @@ void Render::initialize()
         Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
         factory->EnumAdapters(best_adapter_index, &adapter);
 
+        ID3D11Device* temp_device;
+        ID3D11DeviceContext* temp_context;
         D3D11_CHECK(D3D11CreateDeviceAndSwapChain(adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN,
                                                   nullptr, create_device_flags,
                                                   featureLevel, 1, D3D11_SDK_VERSION,
                                                   &swapDesc, &swapchain_,
-                                                  &device_, nullptr, &context_));
+                                                  &temp_device, nullptr, &temp_context));
+
+        temp_device->QueryInterface<ID3D11Device5>(&device_);
+        temp_context->QueryInterface<ID3D11DeviceContext4>(&context_);
+        temp_device->Release();
+        temp_context->Release();
 #else
+        ID3D11Device* temp_device;
+        ID3D11DeviceContext* temp_context;
         // choose default adapter
         D3D11_CHECK(D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE,
                                                   nullptr, create_device_flags,
                                                   featureLevel, 1, D3D11_SDK_VERSION,
                                                   &swapDesc, &swapchain_,
-                                                  &device_, nullptr, &context_));
+                                                  &temp_device, nullptr, &temp_context));
+        temp_device->QueryInterface<ID3D11Device5>(&device_);
+        temp_context->QueryInterface<ID3D11DeviceContext4>(&context_);
+        temp_device->Release();
+        temp_context->Release();
 #endif
 
 #ifndef NDEBUG
@@ -274,12 +287,12 @@ void Render::destroy_resources()
     destroy_render_target_view();
 }
 
-ID3D11Device* Render::device() const
+ID3D11Device5* Render::device() const
 {
     return device_.Get();
 }
 
-ID3D11DeviceContext* Render::context() const
+ID3D11DeviceContext4* Render::context() const
 {
     return context_.Get();
 }

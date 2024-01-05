@@ -1,9 +1,4 @@
 #include "buffer.h"
-#include "render/d3d11_common.h"
-#include "core/game.h"
-#include "render/render.h"
-
-#include <cassert>
 
 void IndexBuffer::initialize_internal(const void* data, size_t count, size_t sizeof_data)
 {

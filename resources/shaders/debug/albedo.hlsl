@@ -1,4 +1,5 @@
-#include "framework/shaders/common/registers.hlsl"
+#define CAMERA_REGISTER b0
+#include "framework/shaders/common/types.fx"
 
 struct VS_IN
 {
@@ -47,12 +48,13 @@ PS_OUT PSMain(PS_IN input)
 {
     PS_OUT res = (PS_OUT)0;
 
-    res.color = (0.2).xxxx;
+    float4 albedo_color;
+    albedo_color = albedo_tex.Sample(tex_sampler, input.uv);
+    res.color = pow(abs(albedo_color), 2.2f);
 
-    // if (material_flags & 1) {
-    //     albedo_color = albedo_tex.Sample(tex_sampler, input.uv);
-    //     res.albedo = pow(abs(albedo_color), 2.2f);
-    // }
+    if (res.color.x == 0 && res.color.y == 0 && res.color.z == 0 && res.color.w == 0) {
+        res.color = (0.2).xxxx;
+    }
 
     return res;
 }

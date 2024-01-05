@@ -1,3 +1,6 @@
+#ifndef __TRANSLATE_FX__
+#define __TRANSLATE_FX__
+
 #if defined(__cplusplus)
 
 #include <SimpleMath.h>
@@ -9,6 +12,7 @@ struct DummyStructure{};
 #define FLOAT3 Vector3
 #define FLOAT4 Vector4
 #define MATRIX Matrix
+#define cbuffer struct
 
 #else
 
@@ -18,3 +22,5 @@ struct DummyStructure{};
 #define MATRIX float4x4
 
 #endif
+
+#endif //__TRANSLATE_FX__

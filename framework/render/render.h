@@ -3,7 +3,7 @@
 #include <Windows.h>
 #include <wrl.h>
 #include <d3d11.h>
-#include <d3d11_1.h>
+#include <d3d11_4.h>
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -17,8 +17,8 @@ class Render
 {
 private:
     // main D3D11 units
-    Microsoft::WRL::ComPtr<ID3D11Device> device_{ nullptr };
-    Microsoft::WRL::ComPtr<ID3D11DeviceContext> context_{ nullptr };
+    Microsoft::WRL::ComPtr<ID3D11Device5> device_{ nullptr };
+    Microsoft::WRL::ComPtr<ID3D11DeviceContext4> context_{ nullptr };
     Microsoft::WRL::ComPtr<IDXGISwapChain> swapchain_{ nullptr };
 
     constexpr static uint32_t swapchain_buffer_count_{ 2 };
@@ -60,8 +60,8 @@ public:
 
     void destroy_resources();
 
-    ID3D11Device* device() const;
-    ID3D11DeviceContext* context() const;
+    ID3D11Device5* device() const;
+    ID3D11DeviceContext4* context() const;
 
     Camera* camera() const;
 

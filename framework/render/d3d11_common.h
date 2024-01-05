@@ -21,5 +21,5 @@
         if (ptr != nullptr) {   \
             (ptr)->Release();   \
         }                       \
-        (ptr = nullptr);        \
+        ptr = nullptr;          \
     } while (0, 0)

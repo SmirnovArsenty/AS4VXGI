@@ -36,6 +36,7 @@ void Camera::update()
         // update matrices
         camera_data_.vp = view_proj();
         camera_data_.vp_inverse = view_proj().Invert();
+        camera_data_.projection = proj();
         camera_data_.screen_width = Game::inst()->win().screen_width();
         camera_data_.screen_height = Game::inst()->win().screen_height();
 
@@ -63,7 +64,7 @@ float Camera::get_near() const
 
 float Camera::get_far() const
 {
-    constexpr float far_plane = 1e3f;
+    constexpr float far_plane = 1e5f;
     return far_plane;
 }
 

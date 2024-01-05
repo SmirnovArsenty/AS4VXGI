@@ -7,10 +7,14 @@
 
 #include "render/resource/buffer.h"
 #include "render/resource/texture.h"
+#include "render/resource/sampler.h"
+#include "render/resource/material.h"
 #include "render/resource/shader.h"
 
 #include "SimpleMath.h"
 using namespace DirectX::SimpleMath;
+
+#include "resources/shaders/voxels/voxel.fx"
 
 class Camera;
 
@@ -30,40 +34,19 @@ public:
     void update();
 
     void draw(Camera* camera);
-private:
-    class Material
-    {
-    public:
-        Material() = default;
-        ~Material() = default;
-    private:
-        Texture diffuse_;
-    };
 
+    std::vector<ID3D11ShaderResourceView*> get_index_buffers_srv();
+    std::vector<ID3D11ShaderResourceView*> get_vertex_buffers_srv();
+
+    std::vector<std::vector<MeshTreeNode>> get_meshes_trees();
+private:
     class Mesh
     {
     public:
-#pragma pack(push, 1)
-        struct MeshTreeNode
-        {
-            float min[3]{ FLT_MAX };
-            int32_t start_index;
-            float max[3]{ FLT_MIN };
-            int32_t count;
-        };
-
-        struct Vertex
-        {
-            aiVector3D position;
-            aiVector2D uv;
-            aiVector3D normal;
-        };
-#pragma pack(pop)
-
         Mesh() = default;
         ~Mesh() = default;
 
-        void initialize(uint32_t material_id,
+        void initialize(Material& material,
                         const std::vector<uint32_t>& indices,
                         const std::vector<Vertex>& vertices,
                         float min[3], float max[3]);
@@ -74,9 +57,13 @@ private:
 #ifndef NDEBUG
         void debug_draw();
 #endif
+
+        ID3D11ShaderResourceView* get_index_buffer_srv() { return index_buffer_resource_view_.getSRV(); }
+        ID3D11ShaderResourceView* get_vertex_buffer_srv() { return vertex_buffer_resource_view_.getSRV(); }
+
+        std::vector<MeshTreeNode> get_mesh_tree() { return mesh_tree_; }
     private:
-        static constexpr uint32_t invalid_material_id = 0xFFFFFFFF;
-        uint32_t material_id_ = invalid_material_id;
+        Material material_;
 
         // mesh extents
         float min_[3];
@@ -88,6 +75,8 @@ private:
         UINT index_count_{ 0 };
         IndexBuffer index_buffer_;
         VertexBuffer vertex_buffer_;
+        ShaderResource<uint32_t> index_buffer_resource_view_;
+        ShaderResource<Vertex> vertex_buffer_resource_view_;
 
         std::vector<MeshTreeNode> mesh_tree_;
 
@@ -95,9 +84,9 @@ private:
 
 #ifndef NDEBUG
         ShaderResource<Matrix> box_transformations_;
-        static GraphicsShader* box_shader_;
-        static IndexBuffer* box_index_buffer_;
-        static VertexBuffer* box_vertex_buffer_;
+        GraphicsShader box_shader_;
+        IndexBuffer box_index_buffer_;
+        VertexBuffer box_vertex_buffer_;
 #endif
     };
 
@@ -105,8 +94,6 @@ private:
     void load_mesh(aiMesh* mesh, const aiScene* scene);
 
     std::vector<Mesh> meshes_;
-
-    std::unordered_map<uint32_t, Material> materials_;
 
     // struct {
     //     uint32_t dummy[4];

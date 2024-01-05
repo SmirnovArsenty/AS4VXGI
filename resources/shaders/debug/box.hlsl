@@ -1,15 +1,17 @@
-#include "framework/shaders/common/registers.hlsl"
+#define CAMERA_REGISTER b0
+#include "framework/shaders/common/types.fx"
 
 struct VS_IN
 {
-    float4 position : POSITION0;
     uint index : SV_InstanceID;
+    float4 position : POSITION0;
 };
 
-struct PS_IN
+struct PS_VS
 {
     float4 pos : SV_POSITION;
     float4 world_model_pos : POSITION0;
+    float4 color : COLOR0;
 };
 
 struct PS_OUT
@@ -25,19 +27,20 @@ cbuffer ModelData : register(b1)
 
 StructuredBuffer<float4x4> box_transform : register(t0);
 
-PS_IN VSMain(VS_IN input)
+PS_VS VSMain(VS_IN input)
 {
-    PS_IN res = (PS_IN)0;
+    PS_VS res = (PS_VS) 0;
 
-    res.pos = mul(camera.vp, float4(mul(box_transform[input.index], mul(transform, float4(input.position))).xyz, 1.f));
+    res.pos = mul(camera.vp, mul(box_transform[input.index], mul(transform, input.position)));
+    res.color = float4(((255.f - input.index) / 255.f).xxx, 1.f);
 
     return res;
 }
 
 [earlydepthstencil]
-PS_OUT PSMain(PS_IN input)
+PS_OUT PSMain(PS_VS input)
 {
     PS_OUT res = (PS_OUT)0;
-    res.color = float4(0.8, 0.8, 0.8, 1.0);
+    res.color = input.color;
     return res;
 }

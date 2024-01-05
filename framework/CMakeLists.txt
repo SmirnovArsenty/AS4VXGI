@@ -23,15 +23,18 @@ set(group_render
 )
 
 set(group_render_resource
-    render/resource/resource_manager.cpp
-    render/resource/resource_manager.h
+    render/resource/resource.h
 
     render/resource/buffer.cpp
     render/resource/buffer.h
+    render/resource/fence.cpp
+    render/resource/fence.h
+    render/resource/material.cpp
+    render/resource/material.h
+    render/resource/sampler.cpp
+    render/resource/sampler.h
     render/resource/shader.cpp
     render/resource/shader.h
-    # render/resource/shader_cache.cpp
-    # render/resource/shader_cache.h
     render/resource/texture.cpp
     render/resource/texture.h
 )
