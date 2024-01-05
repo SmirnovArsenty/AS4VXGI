@@ -20,6 +20,15 @@ public:
 private:
     std::vector<ModelTree> model_trees_;
 
+    // sync mechanism
+    struct {
+        int32_t data[4]{};
+    } complete_data_;
+    UnorderedAccessBuffer<decltype(complete_data_)> complete_buffer_;
+    ReadbackBuffer<uint32_t> complete_buffer_cpu_;
+    ComputeShader shader_complete_;
+    ComputeShader shader_complete_reset_;
+
     // voxels storage
     UnorderedAccessBuffer<Voxel> voxels_;
 

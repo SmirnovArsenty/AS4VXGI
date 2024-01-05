@@ -265,7 +265,7 @@ void Render::restore_targets()
 
 void Render::end_frame()
 {
-    D3D11_CHECK(swapchain_->Present(1, /* DXGI_PRESENT_DO_NOT_WAIT */ 0));
+    D3D11_CHECK(swapchain_->Present(1, 0));
 }
 
 void Render::destroy_resources()

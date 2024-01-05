@@ -17,8 +17,17 @@ void AS4VXGI_Component::initialize()
     model_trees_.push_back({});
     ModelTree& model = model_trees_.back();
     //model.load("./resources/models/suzanne.fbx");
-    model.load("./resources/models/terrain.fbx");
+    //model.load("./resources/models/terrain.fbx");
     //model.load("./resources/models/sponza/source/sponza.fbx");
+
+    // sync
+    complete_buffer_.initialize(nullptr, 1, D3D11_BUFFER_UAV_FLAG_APPEND);
+    complete_buffer_cpu_.initialize();
+    shader_complete_.set_compute_shader_from_file("./resources/shaders/voxels/complete.hlsl", "CSMain");
+    shader_complete_reset_.set_compute_shader_from_file("./resources/shaders/voxels/complete_reset.hlsl", "CSMain");
+
+    shader_complete_.attach_uav(0, &complete_buffer_);
+    shader_complete_reset_.attach_uav(0, &complete_buffer_);
 
     // voxels storage
     voxels_.initialize(nullptr, voxel_grid_dim * voxel_grid_dim * voxel_grid_dim);
@@ -69,19 +78,43 @@ void AS4VXGI_Component::draw()
         }
 
         {
+            {
+                /*Annotation rence_reset("fence reset");
+                shader_complete_reset_.use();
+                context->Dispatch(1, 1, 1);*/
+            }
+
             // stage 2
             Annotation fill("fill voxel params");
             shader_voxels_fill_.use();
             for (int i = 0; i < index_buffers_srv_.size(); ++i) {
                 voxel_grid_params_.mesh_node_count = static_cast<int32_t>(mesh_trees_[i].size());
                 voxel_grid_params_buffer_.update(&voxel_grid_params_);
+                context->CSSetConstantBuffers(1, 1, &voxel_grid_params_buffer_.getBuffer());
+
                 context->CSSetShaderResources(0, 1, &mesh_trees_[i].getSRV());
                 context->CSSetShaderResources(1, 1, &index_buffers_srv_[i]);
                 context->CSSetShaderResources(2, 1, &vertex_buffers_srv_[i]);
 
                 context->Dispatch(voxel_grid_dim, voxel_grid_dim, voxel_grid_dim);
             }
-            
+
+            // fence
+            {
+                Annotation fence("fence");
+                shader_complete_.use();
+                context->Dispatch(1, 1, 1);
+
+                context->CopyStructureCount(complete_buffer_cpu_.getBuffer(), 0, complete_buffer_.getUAV());
+                int32_t complete = complete_buffer_cpu_.data();
+                while (complete == 0) {
+                    context->CopyStructureCount(complete_buffer_cpu_.getBuffer(), 0, complete_buffer_.getUAV());
+                    complete = complete_buffer_cpu_.data();
+                }
+
+                shader_complete_reset_.use();
+                context->Dispatch(1, 1, 1);
+            }
 
 #ifndef NDEBUG
             // visualize voxel grid
@@ -89,7 +122,6 @@ void AS4VXGI_Component::draw()
                 Annotation debug("voxels debug");
                 shader_voxels_draw_.use();
                 context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
-
 
                 context->VSSetConstantBuffers(1, 1, &voxel_grid_params_buffer_.getBuffer());
                 context->HSSetConstantBuffers(1, 1, &voxel_grid_params_buffer_.getBuffer());

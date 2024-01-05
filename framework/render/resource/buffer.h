@@ -125,6 +125,49 @@ public:
 };
 
 template<class T>
+class ReadbackBuffer : public Buffer
+{
+public:
+    ReadbackBuffer() = default;
+
+    void initialize()
+    {
+        D3D11_BUFFER_DESC buffer_desc{};
+        buffer_desc.Usage = D3D11_USAGE_STAGING;
+        buffer_desc.BindFlags = 0;
+        buffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        buffer_desc.MiscFlags = 0;
+        buffer_desc.StructureByteStride = 0;
+        buffer_desc.ByteWidth = sizeof(T);
+
+        auto device = Game::inst()->render().device();
+        D3D11_CHECK(device->CreateBuffer(&buffer_desc, nullptr, &resource_));
+    }
+
+    void reset()
+    {
+        assert(resource_ != nullptr);
+        auto context = Game::inst()->render().context();
+        D3D11_MAPPED_SUBRESOURCE mss;
+        context->Map(resource_, 0, D3D11_MAP_READ, 0, &mss);
+        memset(mss.pData, 0, sizeof(T));
+        context->Unmap(resource_, 0);
+    }
+
+    T data()
+    {
+        assert(resource_ != nullptr);
+        T data;
+        auto context = Game::inst()->render().context();
+        D3D11_MAPPED_SUBRESOURCE mss;
+        context->Map(resource_, 0, D3D11_MAP_READ, 0, &mss);
+        memcpy(&data, mss.pData, sizeof(T));
+        context->Unmap(resource_, 0);
+        return data;
+    }
+};
+
+template<class T>
 class ShaderResource : public Buffer
 {
 private:
@@ -184,7 +227,7 @@ class UnorderedAccessBuffer : public Buffer
 public:
     UnorderedAccessBuffer() = default;
 
-    void initialize(T* data, uint32_t count)
+    void initialize(T* data, uint32_t count, D3D11_BUFFER_UAV_FLAG flag = (D3D11_BUFFER_UAV_FLAG)0)
     {
         auto device = Game::inst()->render().device();
 
@@ -218,7 +261,7 @@ public:
         uav_desc.Format = DXGI_FORMAT_UNKNOWN;
         uav_desc.Buffer.FirstElement = 0;
         uav_desc.Buffer.NumElements = count;
-        uav_desc.Buffer.Flags = 0;
+        uav_desc.Buffer.Flags = flag;
         D3D11_CHECK(device->CreateUnorderedAccessView(resource_, &uav_desc, &unordered_access_view_));
     }
 };

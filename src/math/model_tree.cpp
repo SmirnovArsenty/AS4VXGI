@@ -201,8 +201,7 @@ void ModelTree::load(const std::string& file)
 
 void ModelTree::unload()
 {
-    rasterizer_state_->Release();
-    rasterizer_state_ = nullptr;
+    SAFE_RELEASE(rasterizer_state_);
 
     if constexpr (sizeof(dynamic_model_data_) != 0) {
         dynamic_model_buffer_.destroy();
