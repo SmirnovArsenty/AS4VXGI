@@ -162,8 +162,6 @@ void ModelTree::load(const std::string& file)
     meshes_.reserve(scene->mNumMeshes);
     load_node(scene->mRootNode, scene);
 
-    albedo_shader_.set_vs_shader_from_file("./resources/shaders/debug/albedo.hlsl", "VSMain");
-    albedo_shader_.set_ps_shader_from_file("./resources/shaders/debug/albedo.hlsl", "PSMain");
     D3D11_INPUT_ELEMENT_DESC inputs[] =
     {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
@@ -171,6 +169,8 @@ void ModelTree::load(const std::string& file)
         { "TEXCOORD_V", 0, DXGI_FORMAT_R32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
     };
+    albedo_shader_.set_vs_shader_from_file("./resources/shaders/debug/albedo.hlsl", "VSMain");
+    albedo_shader_.set_ps_shader_from_file("./resources/shaders/debug/albedo.hlsl", "PSMain");
     albedo_shader_.set_input_layout(inputs, std::size(inputs));
 
     normal_shader_.set_vs_shader_from_file("./resources/shaders/debug/normal.hlsl", "VSMain");
@@ -321,12 +321,14 @@ void ModelTree::Mesh::split_vertices(float min[3], float max[3], int32_t start, 
 
     int32_t indices_count[3] = { (int32_t)indices[0].size(), (int32_t)indices[1].size(), (int32_t)indices[2].size() };
 
-    MeshTreeNode node;
-    node.min = Vector3(min);
-    node.max = Vector3(max);
-    node.start_index = start;
-    node.count = indices_count[0];
-    mesh_tree_.push_back(node);
+    if (indices_count[0] > 0) {
+        MeshTreeNode node;
+        node.min = Vector3(min);
+        node.max = Vector3(max);
+        node.start_index = start;
+        node.count = indices_count[0];
+        mesh_tree_.push_back(node);
+    }
 
     {
         int32_t offset = start;

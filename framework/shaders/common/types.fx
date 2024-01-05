@@ -8,6 +8,7 @@ struct CameraData
     MATRIX vp;
     MATRIX vp_inverse;
     MATRIX projection; // camera space
+    MATRIX projection_inverse; // camera space
     FLOAT3 position;
     float screen_width;
     FLOAT3 forward;

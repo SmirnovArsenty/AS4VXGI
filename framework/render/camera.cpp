@@ -37,6 +37,7 @@ void Camera::update()
         camera_data_.vp = view_proj();
         camera_data_.vp_inverse = view_proj().Invert();
         camera_data_.projection = proj();
+        camera_data_.projection_inverse = proj().Invert();
         camera_data_.screen_width = Game::inst()->win().screen_width();
         camera_data_.screen_height = Game::inst()->win().screen_height();
 

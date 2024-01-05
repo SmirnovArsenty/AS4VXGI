@@ -5,8 +5,8 @@
 
 #include "as4vxgi.h"
 
-constexpr int32_t voxel_grid_dim = 10;
-constexpr float voxel_grid_size = 100;
+constexpr int32_t voxel_grid_dim = 110;
+constexpr float voxel_grid_size = 20000;
 inline int align(int value, int alignment)
 {
     return (value + (alignment - 1)) & ~(alignment - 1);
@@ -17,7 +17,7 @@ void AS4VXGI_Component::initialize()
     model_trees_.push_back({});
     ModelTree& model = model_trees_.back();
     //model.load("./resources/models/suzanne.fbx");
-    //model.load("./resources/models/terrain.fbx");
+    model.load("./resources/models/terrain.fbx");
     //model.load("./resources/models/sponza/source/sponza.fbx");
 
     // sync
@@ -78,12 +78,6 @@ void AS4VXGI_Component::draw()
         }
 
         {
-            {
-                /*Annotation rence_reset("fence reset");
-                shader_complete_reset_.use();
-                context->Dispatch(1, 1, 1);*/
-            }
-
             // stage 2
             Annotation fill("fill voxel params");
             shader_voxels_fill_.use();
