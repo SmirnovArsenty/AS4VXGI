@@ -9,6 +9,12 @@
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, char*, int)
 {
+    // FILE* pix;
+    // fopen_s(&pix, "WinPixGpuCapturer.dll", "r");
+    // if (pix != nullptr) {
+    //     fclose(pix);
+    //     LoadLibrary("WinPixGpuCapturer.dll");
+    // }
     Game::inst()->add_component(new AS4VXGI_Component{});
 
     Game::inst()->initialize(800, 800);

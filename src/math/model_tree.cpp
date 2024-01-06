@@ -8,6 +8,8 @@
 #include "render/camera.h"
 #include "model_tree.h"
 
+constexpr float smallest_length = 0.5f;
+
 void ModelTree::Mesh::initialize(Material& material,
     const std::vector<uint32_t>& indices,
     const std::vector<Vertex>& vertices,
@@ -25,7 +27,54 @@ void ModelTree::Mesh::initialize(Material& material,
     }
     index_count_ = static_cast<UINT>(indices.size());
 
-    split_vertices(min_, max_, 0, index_count_);
+    mesh_tree_.reserve(index_count_ / 3);
+    split_vertices(min_, max_, 0, index_count_, 0);
+    uint32_t max_index = 0;
+    for (auto& node : mesh_tree_) {
+        max_index = std::max<uint32_t>(node.first, max_index);
+    }
+
+    // 0 - root index, already present
+    // max_index - last present index, don't check it
+    for (uint32_t i = 1; i < max_index; ++i) {
+        auto it = mesh_tree_.find(i);
+        if (it == mesh_tree_.end()) {
+            uint32_t parent_index = (i - 1) / 2;
+            MeshTreeNode parent = mesh_tree_[parent_index];
+
+            const float length[3] = { max[0] - min[0], max[1] - min[1], max[2] - min[2] };
+            const float mean[3] = { (max[0] + min[0]) / 2, (max[1] + min[1]) / 2, (max[2] + min[2]) / 2 };
+            int32_t split_index = -1;
+            if (length[0] >= length[1] && length[0] >= length[2] && length[0] > smallest_length) {
+                split_index = 0;
+            }
+            else if (length[1] >= length[0] && length[1] >= length[2] && length[1] > smallest_length) {
+                split_index = 1;
+            }
+            else if (length[2] >= length[0] && length[2] >= length[1] && length[2] > smallest_length) {
+                split_index = 2;
+            }
+
+            aiVector3D node_min;
+            aiVector3D node_max;
+            memcpy(&node_min, &parent.min, sizeof(float) * 3);
+            memcpy(&node_max, &parent.max, sizeof(float) * 3);
+
+            if (i & 1) {
+                node_max[split_index] = mean[split_index];
+            } else {
+                node_min[split_index] = mean[split_index];
+            }
+
+            MeshTreeNode node{};
+            memcpy(&node.min, &node_min, sizeof(float) * 3);
+            memcpy(&node.max, &node_max, sizeof(float) * 3);
+            node.start_index = 0;
+            node.count = 0;
+
+            mesh_tree_[i] = node;
+        }
+    }
 
     index_buffer_.initialize(indices.data(), indices.size());
     vertex_buffer_.initialize(vertices.data(), vertices.size(), sizeof(Vertex));
@@ -267,15 +316,25 @@ std::vector<ID3D11ShaderResourceView*> ModelTree::get_vertex_buffers_srv()
 std::vector<std::vector<MeshTreeNode>> ModelTree::get_meshes_trees()
 {
     std::vector<std::vector<MeshTreeNode>> result;
+    result.reserve(meshes_.size());
     for (Mesh& mesh : meshes_) {
         result.push_back(mesh.get_mesh_tree());
     }
     return result;
 }
 
-void ModelTree::Mesh::split_vertices(float min[3], float max[3], int32_t start, int32_t count)
+std::vector<MeshTreeNode> ModelTree::Mesh::get_mesh_tree() const
 {
-    constexpr float smallest_length = 1000.f;
+    std::vector<MeshTreeNode> res;
+    res.reserve(mesh_tree_.size());
+    for (int i = 0; i < mesh_tree_.size(); ++i) {
+        res.push_back(mesh_tree_.at(i));
+    }
+    return res;
+}
+
+void ModelTree::Mesh::split_vertices(float min[3], float max[3], int32_t start, int32_t count, int32_t current_mesh_node_index)
+{
     if (count == 0) {
         return;
     }
@@ -321,14 +380,14 @@ void ModelTree::Mesh::split_vertices(float min[3], float max[3], int32_t start, 
 
     int32_t indices_count[3] = { (int32_t)indices[0].size(), (int32_t)indices[1].size(), (int32_t)indices[2].size() };
 
-    if (indices_count[0] > 0) {
+    //if (indices_count[0] > 0) {
         MeshTreeNode node;
         node.min = Vector3(min);
         node.max = Vector3(max);
         node.start_index = start;
         node.count = indices_count[0];
-        mesh_tree_.push_back(node);
-    }
+        mesh_tree_[current_mesh_node_index] = node;
+    //}
 
     {
         int32_t offset = start;
@@ -355,7 +414,11 @@ void ModelTree::Mesh::split_vertices(float min[3], float max[3], int32_t start, 
                 new_min[split_index] = mean[split_index];
             }
 
-            split_vertices(new_min, new_max, offset, indices_count[i + 1]);
+            // children:
+            // (2i + 1) and (2i + 2)
+            // parent:
+            // (i - 1) / 2
+            split_vertices(new_min, new_max, offset, indices_count[i + 1], 2 * current_mesh_node_index + 1 + i);
             offset += indices_count[i + 1];
         }
     }

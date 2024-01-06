@@ -53,20 +53,19 @@ PS_VS VSMain(VS_IN input)
     res.pos = float4(pos, 1.f);
     //res.pos = mul(camera.vp, float4(pos, 1.f));
     float3 color = abs(normalize(pos - camera.position));
-    res.color = float4(color, voxels[input.index].albedo.x);
+    res.color = float4(voxels[input.index].normal, voxels[input.index].metalness);
 
     return res;
 }
 
 [maxvertexcount(36)]
-void GSMain(point PS_VS input[1], inout LineStream<PS_VS>/* TriangleStream LineStream<PS_VS>*/ OutputStream)
+void GSMain(point PS_VS input[1], inout TriangleStream<PS_VS>/* TriangleStream LineStream<PS_VS>*/ OutputStream)
 {
     float size = (voxel_grid.size / voxel_grid.dimension);
 
     PS_VS data = input[0];
 
-    if (data.color.w <= 0)
-    {
+    if (data.color.w <= 0) {
         return;
     }
 
@@ -78,7 +77,7 @@ void GSMain(point PS_VS input[1], inout LineStream<PS_VS>/* TriangleStream LineS
     float4x4 transform = camera.projection;
     //transform = camera.vp; // debug
 
-#if 0
+#if 1
     // boxes
     data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + 0, input[0].pos.z + size, input[0].pos.w));
     OutputStream.Append(data);
@@ -201,53 +200,77 @@ void GSMain(point PS_VS input[1], inout LineStream<PS_VS>/* TriangleStream LineS
     OutputStream.Append(data);
     OutputStream.RestartStrip();
 
-    data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + 0, input[0].pos.z + 0, input[0].pos.w));
-    OutputStream.Append(data);
-    data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + 0, input[0].pos.z + 0, input[0].pos.w));
-    OutputStream.Append(data);
-    data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + 0, input[0].pos.z + size, input[0].pos.w));
-    OutputStream.Append(data);
-    data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + 0, input[0].pos.z + size, input[0].pos.w));
-    OutputStream.Append(data);
-    data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + 0, input[0].pos.z + 0, input[0].pos.w));
-    OutputStream.Append(data);
-    OutputStream.RestartStrip();
-
-    data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + size, input[0].pos.z + 0, input[0].pos.w));
-    OutputStream.Append(data);
-    data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + size, input[0].pos.z + 0, input[0].pos.w));
-    OutputStream.Append(data);
-    data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + size, input[0].pos.z + size, input[0].pos.w));
-    OutputStream.Append(data);
-    data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + size, input[0].pos.z + size, input[0].pos.w));
-    OutputStream.Append(data);
-    data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + size, input[0].pos.z + 0, input[0].pos.w));
-    OutputStream.Append(data);
-    OutputStream.RestartStrip();
-
-    data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + 0, input[0].pos.z + 0, input[0].pos.w));
-    OutputStream.Append(data);
-    data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + size, input[0].pos.z + 0, input[0].pos.w));
-    OutputStream.Append(data);
-    data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + size, input[0].pos.z + 0, input[0].pos.w));
-    OutputStream.Append(data);
     data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + 0, input[0].pos.z + 0, input[0].pos.w));
     OutputStream.Append(data);
     data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + 0, input[0].pos.z + 0, input[0].pos.w));
     OutputStream.Append(data);
     OutputStream.RestartStrip();
 
-    data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + 0, input[0].pos.z + size, input[0].pos.w));
+    data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + size, input[0].pos.z + 0, input[0].pos.w));
+    OutputStream.Append(data);
+    data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + size, input[0].pos.z + 0, input[0].pos.w));
+    OutputStream.Append(data);
+    OutputStream.RestartStrip();
+
+    data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + size, input[0].pos.z + size, input[0].pos.w));
     OutputStream.Append(data);
     data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + size, input[0].pos.z + size, input[0].pos.w));
     OutputStream.Append(data);
-    data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + size, input[0].pos.z + size, input[0].pos.w));
-    OutputStream.Append(data);
+    OutputStream.RestartStrip();
+
     data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + 0, input[0].pos.z + size, input[0].pos.w));
     OutputStream.Append(data);
     data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + 0, input[0].pos.z + size, input[0].pos.w));
     OutputStream.Append(data);
     OutputStream.RestartStrip();
+
+    // data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + 0, input[0].pos.z + 0, input[0].pos.w));
+    // OutputStream.Append(data);
+    // data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + 0, input[0].pos.z + 0, input[0].pos.w));
+    // OutputStream.Append(data);
+    // data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + 0, input[0].pos.z + size, input[0].pos.w));
+    // OutputStream.Append(data);
+    // data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + 0, input[0].pos.z + size, input[0].pos.w));
+    // OutputStream.Append(data);
+    // data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + 0, input[0].pos.z + 0, input[0].pos.w));
+    // OutputStream.Append(data);
+    // OutputStream.RestartStrip();
+
+    // data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + size, input[0].pos.z + 0, input[0].pos.w));
+    // OutputStream.Append(data);
+    // data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + size, input[0].pos.z + 0, input[0].pos.w));
+    // OutputStream.Append(data);
+    // data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + size, input[0].pos.z + size, input[0].pos.w));
+    // OutputStream.Append(data);
+    // data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + size, input[0].pos.z + size, input[0].pos.w));
+    // OutputStream.Append(data);
+    // data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + size, input[0].pos.z + 0, input[0].pos.w));
+    // OutputStream.Append(data);
+    // OutputStream.RestartStrip();
+
+    // data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + 0, input[0].pos.z + 0, input[0].pos.w));
+    // OutputStream.Append(data);
+    // data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + size, input[0].pos.z + 0, input[0].pos.w));
+    // OutputStream.Append(data);
+    // data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + size, input[0].pos.z + 0, input[0].pos.w));
+    // OutputStream.Append(data);
+    // data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + 0, input[0].pos.z + 0, input[0].pos.w));
+    // OutputStream.Append(data);
+    // data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + 0, input[0].pos.z + 0, input[0].pos.w));
+    // OutputStream.Append(data);
+    // OutputStream.RestartStrip();
+
+    // data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + 0, input[0].pos.z + size, input[0].pos.w));
+    // OutputStream.Append(data);
+    // data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + size, input[0].pos.z + size, input[0].pos.w));
+    // OutputStream.Append(data);
+    // data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + size, input[0].pos.z + size, input[0].pos.w));
+    // OutputStream.Append(data);
+    // data.pos = mul(transform, float4(input[0].pos.x + size, input[0].pos.y + 0, input[0].pos.z + size, input[0].pos.w));
+    // OutputStream.Append(data);
+    // data.pos = mul(transform, float4(input[0].pos.x + 0, input[0].pos.y + 0, input[0].pos.z + size, input[0].pos.w));
+    // OutputStream.Append(data);
+    // OutputStream.RestartStrip();
 #endif
 }
 

@@ -32,14 +32,21 @@ private:
     // voxels storage
     UnorderedAccessBuffer<Voxel> voxels_;
 
+    /////
     // stage1 - clear storage
+    /////
+
     ComputeShader shader_voxels_clear_;
 
+    /////
     // stage2 - fill storage with vertices params
-    ComputeShader shader_voxels_fill_;
+    /////
+
     std::vector<ShaderResource<MeshTreeNode>> mesh_trees_;
+    ComputeShader shader_voxels_fill_;
     std::vector<ID3D11ShaderResourceView*> index_buffers_srv_;
     std::vector<ID3D11ShaderResourceView*> vertex_buffers_srv_;
+    std::vector<ShaderResource<Matrix>*> model_matrix_srv_;
     VoxelGrid voxel_grid_params_;
     DynamicBuffer<decltype(voxel_grid_params_)> voxel_grid_params_buffer_;
 #ifndef NDEBUG

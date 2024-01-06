@@ -48,4 +48,43 @@ cbuffer __VoxelGrid__ : register(VOXEL_GRID_REGISTER)
 
 #endif
 
+#ifndef __cplusplus
+
+/////
+// common hlsl structures and methods
+/////
+
+struct Ray
+{
+    float3 origin;
+    float3 direction;
+};
+
+Ray GenerateRay(uint3 voxel_location)
+{
+    Ray res;
+    res.direction = normalize(camera.forward);
+    res.origin = camera.position;
+    res.origin -= camera.forward * (voxel_grid.size / 2);
+
+    float3 up = float3(0, 1, 0);
+    float3 right = cross(camera.forward, up);
+    right = normalize(right);
+    res.origin -= right * (voxel_grid.size / 2);
+
+    up = cross(right, camera.forward);
+    up = normalize(up);
+    res.origin -= up * voxel_grid.size / 2;
+
+    float unit = voxel_grid.size / voxel_grid.dimension;
+    // + 0.5 to place ray origin in the center of voxel
+    res.origin += unit * (voxel_location.x * right + 0.5);
+    res.origin += unit * (voxel_location.y * up + 0.5);
+    res.origin += unit * (voxel_location.z * camera.forward);
+
+    return res;
+}
+
+#endif
+
 #endif // __VOXEL_FX__

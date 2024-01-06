@@ -5,8 +5,8 @@
 
 #include "as4vxgi.h"
 
-constexpr int32_t voxel_grid_dim = 110;
-constexpr float voxel_grid_size = 20000;
+constexpr int32_t voxel_grid_dim = 100;
+constexpr float voxel_grid_size = 10;
 inline int align(int value, int alignment)
 {
     return (value + (alignment - 1)) & ~(alignment - 1);
@@ -16,8 +16,8 @@ void AS4VXGI_Component::initialize()
 {
     model_trees_.push_back({});
     ModelTree& model = model_trees_.back();
-    //model.load("./resources/models/suzanne.fbx");
-    model.load("./resources/models/terrain.fbx");
+    model.load("./resources/models/suzanne.fbx");
+    //model.load("./resources/models/terrain.fbx");
     //model.load("./resources/models/sponza/source/sponza.fbx");
 
     // sync
@@ -39,12 +39,20 @@ void AS4VXGI_Component::initialize()
     shader_voxels_clear_.attach_uav(0, &voxels_);
 
     // fill voxels
-    for (ModelTree& mode_tree : model_trees_) {
-        for (ID3D11ShaderResourceView* srv :model.get_index_buffers_srv())
+    for (ModelTree& model_tree : model_trees_) {
+        Matrix transform = model_tree.get_transform();
+
+        for (ID3D11ShaderResourceView* srv : model_tree.get_index_buffers_srv()) {
+            model_matrix_srv_.push_back({nullptr});
+            model_matrix_srv_.back() = new ShaderResource<Matrix>();
+            model_matrix_srv_.back()->initialize(&transform, 1);
+
             index_buffers_srv_.push_back(srv);
-        for (ID3D11ShaderResourceView* srv : model.get_vertex_buffers_srv())
+        }
+        for (ID3D11ShaderResourceView* srv : model_tree.get_vertex_buffers_srv()) {
             vertex_buffers_srv_.push_back(srv);
-        for (std::vector<MeshTreeNode> mesh_tree : model.get_meshes_trees()) {
+        }
+        for (std::vector<MeshTreeNode> mesh_tree : model_tree.get_meshes_trees()) {
             mesh_trees_.push_back({});
             mesh_trees_.back().initialize(mesh_tree.data(), mesh_tree.size());
         }
@@ -81,7 +89,7 @@ void AS4VXGI_Component::draw()
             // stage 2
             Annotation fill("fill voxel params");
             shader_voxels_fill_.use();
-            for (int i = 0; i < index_buffers_srv_.size(); ++i) {
+            for (int i = 0; i < mesh_trees_.size(); ++i) {
                 voxel_grid_params_.mesh_node_count = static_cast<int32_t>(mesh_trees_[i].size());
                 voxel_grid_params_buffer_.update(&voxel_grid_params_);
                 context->CSSetConstantBuffers(1, 1, &voxel_grid_params_buffer_.getBuffer());
@@ -89,6 +97,7 @@ void AS4VXGI_Component::draw()
                 context->CSSetShaderResources(0, 1, &mesh_trees_[i].getSRV());
                 context->CSSetShaderResources(1, 1, &index_buffers_srv_[i]);
                 context->CSSetShaderResources(2, 1, &vertex_buffers_srv_[i]);
+                context->CSSetShaderResources(3, 1, &model_matrix_srv_[i]->getSRV());
 
                 context->Dispatch(voxel_grid_dim, voxel_grid_dim, voxel_grid_dim);
             }
@@ -153,7 +162,9 @@ void AS4VXGI_Component::update()
 
 void AS4VXGI_Component::destroy_resources()
 {
+#ifndef NDEBUG
     shader_voxels_draw_.destroy();
+#endif
     voxel_grid_params_buffer_.destroy();
 
     shader_voxels_fill_.destroy();

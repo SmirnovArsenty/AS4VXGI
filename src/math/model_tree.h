@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <unordered_map>
 
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -37,6 +38,7 @@ public:
 
     std::vector<ID3D11ShaderResourceView*> get_index_buffers_srv();
     std::vector<ID3D11ShaderResourceView*> get_vertex_buffers_srv();
+    Matrix get_transform() const { return dynamic_model_data_.transform; }
 
     std::vector<std::vector<MeshTreeNode>> get_meshes_trees();
 private:
@@ -61,7 +63,7 @@ private:
         ID3D11ShaderResourceView* get_index_buffer_srv() { return index_buffer_resource_view_.getSRV(); }
         ID3D11ShaderResourceView* get_vertex_buffer_srv() { return vertex_buffer_resource_view_.getSRV(); }
 
-        std::vector<MeshTreeNode> get_mesh_tree() { return mesh_tree_; }
+        std::vector<MeshTreeNode> get_mesh_tree() const;
     private:
         Material material_;
 
@@ -78,9 +80,9 @@ private:
         ShaderResource<uint32_t> index_buffer_resource_view_;
         ShaderResource<Vertex> vertex_buffer_resource_view_;
 
-        std::vector<MeshTreeNode> mesh_tree_;
+        std::unordered_map<int32_t, MeshTreeNode> mesh_tree_;
 
-        void split_vertices(float min[3], float max[3], int32_t start, int32_t count);
+        void split_vertices(float min[3], float max[3], int32_t start, int32_t count, int32_t current_mesh_node_index);
 
 #ifndef NDEBUG
         ShaderResource<Matrix> box_transformations_;
