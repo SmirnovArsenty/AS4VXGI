@@ -50,29 +50,29 @@ void Render::initialize()
 
 #if 1
         // choose best adapter by memory
-        Microsoft::WRL::ComPtr<IDXGIFactory> factory;
-        D3D11_CHECK(CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)&factory));
+        Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
+        D3D11_CHECK(CreateDXGIFactory(__uuidof(IDXGIFactory4), (void**)&factory));
         int32_t best_adapter_index = 0;
         int32_t adapter_number = 0;
         size_t best_memory = 0;
         while (true)
         {
-            Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
-            HRESULT enum_result = factory->EnumAdapters(adapter_number, &adapter);
+            Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+            HRESULT enum_result = factory->EnumAdapters1(adapter_number, &adapter);
             if (enum_result != S_OK) {
                 // enumerating finnished
                 break;
             }
-            DXGI_ADAPTER_DESC adapter_desc;
-            adapter->GetDesc(&adapter_desc);
+            DXGI_ADAPTER_DESC1 adapter_desc;
+            adapter->GetDesc1(&adapter_desc);
             if (best_memory < adapter_desc.DedicatedVideoMemory) {
                 best_adapter_index = adapter_number;
                 best_memory = adapter_desc.DedicatedVideoMemory;
             }
             ++adapter_number;
         }
-        Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
-        factory->EnumAdapters(best_adapter_index, &adapter);
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+        factory->EnumAdapters1(best_adapter_index, &adapter);
 
         ID3D11Device* temp_device;
         ID3D11DeviceContext* temp_context;

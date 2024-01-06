@@ -1,5 +1,9 @@
 #include <sstream>
 #include <d3dcompiler.h>
+#include <dxcapi.h>
+#include <fstream>
+
+#pragma comment(lib, "dxcompiler.lib")
 
 #include "core/game.h"
 #include "render/render.h"
@@ -416,6 +420,7 @@ void ComputeShader::set_compute_shader_from_file(const std::string& filename,
     const std::string& entrypoint,
     D3D_SHADER_MACRO* macro, ID3DInclude* include)
 {
+#if 1
     assert(compute_bc_ == nullptr);
     assert(compute_shader_ == nullptr);
 
@@ -425,9 +430,9 @@ void ComputeShader::set_compute_shader_from_file(const std::string& filename,
 
     ID3DBlob* error_code = nullptr;
 
-    unsigned int compile_flags = 0;
+    unsigned int compile_flags = D3DCOMPILE_SKIP_OPTIMIZATION;
 #ifndef NDEBUG
-    compile_flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+    // compile_flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #endif
     // don't use D3D11_CHECK for this call, need to know compilation error message
     HRESULT status = D3DCompileFromFile(wfilename.str().c_str(), macro, include,
@@ -444,8 +449,68 @@ void ComputeShader::set_compute_shader_from_file(const std::string& filename,
     }
     auto device = Game::inst()->render().device();
     D3D11_CHECK(device->CreateComputeShader(compute_bc_->GetBufferPointer(),
-        compute_bc_->GetBufferSize(),
-        nullptr, &compute_shader_));
+                                            compute_bc_->GetBufferSize(),
+                                            nullptr, &compute_shader_));
+
+#else
+    // d3d12 method
+    assert(compute_bc_ == nullptr);
+    assert(compute_shader_ == nullptr);
+
+    // translate filename to wstring
+    std::wstringstream wfilename;
+    wfilename << filename.c_str();
+    // translate entrypoint to wstring
+    std::wstringstream wentrypoint;
+    wentrypoint << entrypoint.c_str();
+
+    IDxcLibrary* library;
+    D3D11_CHECK(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&library)));
+
+    IDxcCompiler* compiler;
+    D3D11_CHECK(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&compiler)));
+
+    uint32_t codePage = CP_UTF8;
+    IDxcBlobEncoding* source_blob;
+    library->CreateBlobFromFile(wfilename.str().c_str(), &codePage, &source_blob);
+
+    IDxcOperationResult* result;
+    HRESULT hr = compiler->Compile(
+        source_blob, // pSource
+        wfilename.str().c_str(), // pSourceName
+        wentrypoint.str().c_str(), // pEntryPoint
+        L"cs_5_0", // pTargetProfile
+        NULL, 0, // pArguments, argCount
+        NULL, 0, // pDefines, defineCount
+        NULL, // pIncludeHandler
+        &result); // ppResult
+    if(SUCCEEDED(hr)) {
+        result->GetStatus(&hr);
+    }
+    if(FAILED(hr)) {
+        if(result) {
+            IDxcBlobEncoding* errors_blob;
+            hr = result->GetErrorBuffer(&errors_blob);
+            if(SUCCEEDED(hr) && errors_blob)
+            {
+                std::stringstream err;
+                err << (char*)(errors_blob->GetBufferPointer());
+                OutputDebugString(err.str().c_str());
+            }
+        }
+        assert(false);
+    }
+    result->GetResult(&compute_bc_);
+
+    auto device = Game::inst()->render().device();
+    D3D11_CHECK(device->CreateComputeShader(compute_bc_->GetBufferPointer(),
+                                            compute_bc_->GetBufferSize(),
+                                            nullptr, &compute_shader_));
+
+    SAFE_RELEASE(source_blob);
+    SAFE_RELEASE(compiler);
+    SAFE_RELEASE(library);
+#endif
 }
 
 void ComputeShader::set_compute_shader_from_memory(const std::string& data,
@@ -464,7 +529,7 @@ void ComputeShader::set_compute_shader_from_memory(const std::string& data,
         macro, include,
         entrypoint.c_str(), "cs_5_0",
         compile_flags, 0,
-        &compute_bc_, &error_code);
+        (ID3DBlob**)&compute_bc_, &error_code);
     if (error_code) {
         std::stringstream err;
         err << (char*)(error_code->GetBufferPointer());

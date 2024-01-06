@@ -12,7 +12,7 @@ struct DummyStructure{};
 #define FLOAT3 Vector3
 #define FLOAT4 Vector4
 #define MATRIX Matrix
-#define cbuffer struct
+// UINT is known
 
 #else
 
@@ -20,6 +20,7 @@ struct DummyStructure{};
 #define FLOAT3 float3
 #define FLOAT4 float4
 #define MATRIX float4x4
+#define UINT uint
 
 #endif
 

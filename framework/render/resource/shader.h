@@ -6,6 +6,7 @@
 #include <vector>
 #include <unordered_map>
 #include <d3dcompiler.h>
+#include <dxcapi.h>
 
 #include "render/resource/buffer.h"
 
@@ -119,6 +120,7 @@ private:
 
     ID3D11ComputeShader* compute_shader_{ nullptr };
     ID3DBlob* compute_bc_{ nullptr };
+    //IDxcBlob* compute_bc_{ nullptr };
 
 public:
     ComputeShader();

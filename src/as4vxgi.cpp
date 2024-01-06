@@ -5,8 +5,9 @@
 
 #include "as4vxgi.h"
 
-constexpr int32_t voxel_grid_dim = 100;
-constexpr float voxel_grid_size = 10;
+constexpr int32_t voxel_grid_dim = 50;
+constexpr float voxel_grid_size = 5;
+
 inline int align(int value, int alignment)
 {
     return (value + (alignment - 1)) & ~(alignment - 1);
