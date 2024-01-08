@@ -63,26 +63,27 @@ struct Ray
 Ray GenerateRayForward(uint3 voxel_location)
 {
     Ray res;
-    res.origin = camera.position;
-    res.origin -= camera.forward * (voxel_grid.size / 2);
+
+    float unit = voxel_grid.size / voxel_grid.dimension;
 
     float3 up = float3(0, 1, 0);
     float3 right = cross(camera.forward, up);
     right = normalize(right);
-    res.origin -= right * (voxel_grid.size / 2);
-
-    up = cross(right, camera.forward);
+    up = cross(camera.forward, right);
     up = normalize(up);
-    res.origin -= up * voxel_grid.size / 2;
 
-    float unit = voxel_grid.size / voxel_grid.dimension;
+    res.origin = camera.position;
+    res.origin -= camera.forward * (voxel_grid.size / 2);
+    res.origin -= right * (voxel_grid.size / 2);
+    res.origin -= up * (voxel_grid.size / 2);
+
     // + 0.5 to place ray origin in the center of voxel
-    res.origin += unit * (voxel_location.x * right + 0.5);
+    res.origin += unit * (voxel_location.x * right);
     res.origin += unit * (voxel_location.y * up + 0.5);
-    res.origin += unit * (voxel_location.z * camera.forward);
+    res.origin += unit * (voxel_location.z * camera.forward - 0.5);
 
     res.direction = normalize(camera.forward);
-    res.direction = (voxel_location.z * 2 < voxel_grid.dimension) ? -res.direction : res.direction;
+    //res.direction = ((uint)(voxel_location.z * 2) < voxel_grid.dimension) ? -res.direction : res.direction;
 
     return res;
 }
@@ -90,26 +91,27 @@ Ray GenerateRayForward(uint3 voxel_location)
 Ray GenerateRayRight(uint3 voxel_location)
 {
     Ray res;
-    res.origin = camera.position;
-    res.origin -= camera.forward * (voxel_grid.size / 2);
+
+    float unit = voxel_grid.size / voxel_grid.dimension;
 
     float3 up = float3(0, 1, 0);
     float3 right = cross(camera.forward, up);
     right = normalize(right);
-    res.origin -= right * (voxel_grid.size / 2);
-
-    up = cross(right, camera.forward);
+    up = cross(camera.forward, right);
     up = normalize(up);
-    res.origin -= up * voxel_grid.size / 2;
 
-    float unit = voxel_grid.size / voxel_grid.dimension;
+    res.origin = camera.position;
+    res.origin -= camera.forward * (voxel_grid.size / 2);
+    res.origin -= right * (voxel_grid.size / 2);
+    res.origin -= up * (voxel_grid.size / 2);
+
     // + 0.5 to place ray origin in the center of voxel
     res.origin += unit * (voxel_location.x * right);
     res.origin += unit * (voxel_location.y * up + 0.5);
     res.origin += unit * (voxel_location.z * camera.forward + 0.5);
 
     res.direction = right;
-    res.direction = (voxel_location.x * 2 < voxel_grid.dimension) ? -res.direction : res.direction;
+    //res.direction = ((uint)(voxel_location.x * 2) < voxel_grid.dimension) ? -res.direction : res.direction;
 
     return res;
 }
@@ -117,26 +119,27 @@ Ray GenerateRayRight(uint3 voxel_location)
 Ray GenerateRayUp(uint3 voxel_location)
 {
     Ray res;
-    res.origin = camera.position;
-    res.origin -= camera.forward * (voxel_grid.size / 2);
+
+    float unit = voxel_grid.size / voxel_grid.dimension;
 
     float3 up = float3(0, 1, 0);
     float3 right = cross(camera.forward, up);
     right = normalize(right);
-    res.origin -= right * (voxel_grid.size / 2);
-
-    up = cross(right, camera.forward);
+    up = cross(camera.forward, right);
     up = normalize(up);
-    res.origin -= up * voxel_grid.size / 2;
 
-    float unit = voxel_grid.size / voxel_grid.dimension;
+    res.origin = camera.position;
+    res.origin -= camera.forward * (voxel_grid.size / 2);
+    res.origin -= right * (voxel_grid.size / 2);
+    res.origin -= up * (voxel_grid.size / 2);
+
     // + 0.5 to place ray origin in the center of voxel
     res.origin += unit * (voxel_location.x * right + 0.5);
     res.origin += unit * (voxel_location.y * up);
     res.origin += unit * (voxel_location.z * camera.forward + 0.5);
 
     res.direction = up;
-    res.direction = (voxel_location.y * 2 < voxel_grid.dimension) ? -res.direction : res.direction;
+    //res.direction = ((uint)(voxel_location.y * 2) < voxel_grid.dimension) ? -res.direction : res.direction;
 
     return res;
 }

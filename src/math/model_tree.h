@@ -27,7 +27,7 @@ public:
 
     // load model to tree
     // allocate resources
-    void load(const std::string& path);
+    void load(const std::string& path, Vector3 position = Vector3(), Quaternion rotation = Quaternion(), Vector3 scale = Vector3(1, 1, 1));
 
     // destroy resources
     void unload();
@@ -95,7 +95,7 @@ private:
     void load_node(aiNode* node, const aiScene* scene);
     void load_mesh(aiMesh* mesh, const aiScene* scene);
 
-    std::vector<Mesh> meshes_;
+    std::vector<Mesh*> meshes_;
 
     // struct {
     //     uint32_t dummy[4];

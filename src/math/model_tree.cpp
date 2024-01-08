@@ -8,7 +8,7 @@
 #include "render/camera.h"
 #include "model_tree.h"
 
-constexpr float smallest_length = 0.5f;
+constexpr float smallest_length = 1000.f;
 
 void ModelTree::Mesh::initialize(Material& material,
     const std::vector<uint32_t>& indices,
@@ -203,7 +203,7 @@ void ModelTree::Mesh::debug_draw()
 }
 #endif
 
-void ModelTree::load(const std::string& file)
+void ModelTree::load(const std::string& file, Vector3 position, Quaternion rotation, Vector3 scale)
 {
     Assimp::Importer importer;
     auto scene = importer.ReadFile(file, aiProcess_Triangulate | aiProcess_ConvertToLeftHanded | aiProcess_GenUVCoords);
@@ -234,8 +234,8 @@ void ModelTree::load(const std::string& file)
     D3D11_CHECK(device->CreateRasterizerState(&opaque_rast_desc, &rasterizer_state_));
 
     // initialize GPU buffers
-    dynamic_model_data_.transform = Matrix::Identity;
-    dynamic_model_data_.inverse_transpose_transform = Matrix::Identity;
+    dynamic_model_data_.transform = Matrix::CreateTranslation(position) * Matrix::CreateFromQuaternion(rotation) * Matrix::CreateScale(scale);
+    dynamic_model_data_.inverse_transpose_transform = dynamic_model_data_.transform.Invert().Transpose();
     if constexpr (sizeof(dynamic_model_data_) != 0) {
         dynamic_model_buffer_.initialize(&dynamic_model_data_);
     }
@@ -263,8 +263,10 @@ void ModelTree::unload()
     albedo_shader_.destroy();
     normal_shader_.destroy();
 
-    for (auto& mesh : meshes_) {
-        mesh.destroy();
+    for (Mesh* mesh : meshes_) {
+        mesh->destroy();
+        delete mesh;
+        mesh = nullptr;
     }
     meshes_.clear();
 }
@@ -282,13 +284,13 @@ void ModelTree::draw(Camera* camera)
     // albedo_shader_.use();
     normal_shader_.use();
     camera->bind();
-    for (auto& mesh : meshes_) {
-        mesh.draw();
+    for (Mesh* mesh : meshes_) {
+        mesh->draw();
     }
 
 #ifndef NDEBUG
-    for (auto& mesh : meshes_) {
-        mesh.debug_draw();
+    for (Mesh* mesh : meshes_) {
+        mesh->debug_draw();
     }
 #endif
 }
@@ -297,8 +299,8 @@ std::vector<ID3D11ShaderResourceView*> ModelTree::get_index_buffers_srv()
 {
     std::vector<ID3D11ShaderResourceView*> result;
     result.reserve(meshes_.size());
-    for (Mesh& mesh : meshes_) {
-        result.push_back(mesh.get_index_buffer_srv());
+    for (Mesh* mesh : meshes_) {
+        result.push_back(mesh->get_index_buffer_srv());
     }
     return result;
 }
@@ -307,8 +309,8 @@ std::vector<ID3D11ShaderResourceView*> ModelTree::get_vertex_buffers_srv()
 {
     std::vector<ID3D11ShaderResourceView*> result;
     result.reserve(meshes_.size());
-    for (Mesh& mesh : meshes_) {
-        result.push_back(mesh.get_vertex_buffer_srv());
+    for (Mesh* mesh : meshes_) {
+        result.push_back(mesh->get_vertex_buffer_srv());
     }
     return result;
 }
@@ -317,8 +319,8 @@ std::vector<std::vector<MeshTreeNode>> ModelTree::get_meshes_trees()
 {
     std::vector<std::vector<MeshTreeNode>> result;
     result.reserve(meshes_.size());
-    for (Mesh& mesh : meshes_) {
-        result.push_back(mesh.get_mesh_tree());
+    for (Mesh* mesh : meshes_) {
+        result.push_back(mesh->get_mesh_tree());
     }
     return result;
 }
@@ -528,7 +530,7 @@ void ModelTree::load_mesh(aiMesh* mesh, const aiScene* scene)
     }
 
     {
-        meshes_.push_back({});
-        meshes_.back().initialize(material, indices, vertices, min, max);
+        meshes_.push_back(new Mesh());
+        meshes_.back()->initialize(material, indices, vertices, min, max);
     }
 }

@@ -11,14 +11,20 @@ StructuredBuffer<int> indices : register(t1);
 StructuredBuffer<Vertex> vertices : register(t2);
 StructuredBuffer<float4x4> model_matrices : register(t3);
 
-#define EPSILON 0.000001f
+uint get_heap_parent_index(uint index)
+{
+    return (max(index, 1u) - 1u) / 2u;
+}
+
 bool inBoxBounds(MeshTreeNode mesh_node, float3 position)
 {
+    float3 diag = mesh_node.max - mesh_node.min;
+    float length = sqrt(dot(diag, diag));
     bool inside = true;
     [unroll]
     for(int i = 0; i < 3; i++) {
-        inside = inside && (position[i] > mesh_node.min[i] - EPSILON);
-        inside = inside && (position[i] < mesh_node.max[i] + EPSILON);
+        inside = inside && (position[i] > mesh_node.min[i] - length * 2);
+        inside = inside && (position[i] < mesh_node.max[i] + length * 2);
     }
 
     return inside;
@@ -28,6 +34,17 @@ float boxIntersection(Ray ray, MeshTreeNode mesh_node)
 {
     float3 _min = mul(model_matrices[0], float4(mesh_node.min, 1.f)).xyz;
     float3 _max = mul(model_matrices[0], float4(mesh_node.max, 1.f)).xyz;
+
+    float epsilon = 0.00001f;
+    if (ray.direction.x == 0) {
+        ray.direction.x = epsilon;
+    }
+    if (ray.direction.y == 0) {
+        ray.direction.y = epsilon;
+    }
+    if (ray.direction.z == 0) {
+        ray.direction.z = epsilon;
+    }
 
     float coeffs[6];
     coeffs[0] = (_min.x - ray.origin.x) / (ray.direction.x);
@@ -39,8 +56,13 @@ float boxIntersection(Ray ray, MeshTreeNode mesh_node)
 
     float t = 0;
     [unroll]
-    for (int i = 0; i < 6; ++i)
-        t = (coeffs[i] > EPSILON && inBoxBounds(mesh_node, ray.origin + ray.direction * coeffs[i])) ? (t == 0 ? coeffs[i] : min(coeffs[i], t)) : t;
+    for (int i = 0; i < 6; ++i) {
+        if (coeffs[i] > 0 && inBoxBounds(mesh_node, ray.origin + ray.direction * coeffs[i])) {
+            if (t == 0 || coeffs[i] < t){
+                t = coeffs[i];
+            }
+        }
+    }
 
     return t;
 }
@@ -72,7 +94,6 @@ float triangleIntersection(in Ray ray, float3 v0, float3 v1, float3 v2, float3 n
                 if (_v > 0 && _v < 1) {
                     if (_u + _v < 1) {
                         t = temp;
-
                         o_normal = normal1 * _w + normal2 * _u + normal3 * _v;
                     }
                 }
@@ -82,80 +103,103 @@ float triangleIntersection(in Ray ray, float3 v0, float3 v1, float3 v2, float3 n
     return t;
 }
 
-void intersectMeshNode(in Ray ray, in uint index, in bool check_needed, inout float box_t, out bool box_intersected, inout float t, inout float3 normal)
-{
-    if (!check_needed) {
-        return;
-    }
-    MeshTreeNode mesh_node = mesh_tree[index];
-    float box_distance = boxIntersection(ray, mesh_node);
-    if (box_distance < EPSILON) { // || box_distance > voxel_grid.size / voxel_grid.dimension) {
-        return;
-    }
-    box_t = box_distance;
-
-    // [optimization] mark box hit
-    box_intersected = true;
-
-    for (int j = mesh_node.start_index; j < mesh_node.start_index + mesh_node.count; j += 3) {
-        float3 tri_normal = (0).xxx;
-        float tri_t = triangleIntersection(ray, mul(model_matrices[0], float4(vertices[indices[j + 0]].position, 1.f)).xyz,
-                                                mul(model_matrices[0], float4(vertices[indices[j + 1]].position, 1.f)).xyz,
-                                                mul(model_matrices[0], float4(vertices[indices[j + 2]].position, 1.f)).xyz,
-                                                vertices[indices[j + 0]].normal,
-                                                vertices[indices[j + 1]].normal,
-                                                vertices[indices[j + 2]].normal,
-                                                tri_normal);
-        if (tri_t > EPSILON && (tri_t < t || t == 0) && (tri_t < voxel_grid.size / voxel_grid.dimension)) {
-            t = tri_t;
-            normal = tri_normal;
-        }
-    }
-}
+#define OPTIMIZATION 1
 
 #define BITS_COUNT 32
-#define ARRAY_SIZE 1000
-[numthreads(1, 1, 1)]
+#define ARRAY_SIZE 32
+[numthreads(4, 4, 4)]
 void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
 {
+#if OPTIMIZATION
     uint hit_buffer[ARRAY_SIZE][3] = (uint[ARRAY_SIZE][3])0; // [optimization] 32-bit buffer to store box hits
+#endif
+    uint count_parents_not_found = 0;
 
+    uint3 currentIndex = dispatchThreadID;
     float t = 0;
     float3 normal = (0).xxx;
     float box_t = 0;
-    Ray rays[3] = { GenerateRayForward(dispatchThreadID), GenerateRayRight(dispatchThreadID), GenerateRayUp(dispatchThreadID) };
+    Ray rays[3] = { GenerateRayForward(currentIndex), GenerateRayRight(currentIndex), GenerateRayUp(currentIndex) };
+    bool found = false;
     for (uint ray_index = 0; ray_index < 3; ++ray_index) {
         for (uint i = 0; i < voxel_grid.mesh_node_count; ++i) {
+#if OPTIMIZATION
             uint parent_index = (max(i, 1u) - 1u) / 2u;
-            uint parent_hit_index = parent_index / BITS_COUNT;
-            uint parent_hit_index_bit_offset = parent_index - parent_hit_index * BITS_COUNT;
-            uint parent_hit_bit = (1 << parent_hit_index_bit_offset);
-            bool need_check = (i == 0) || (hit_buffer[parent_hit_index][ray_index] & parent_hit_bit) || true;
+            // for (parent_index = (max(i, 1u) - 1u) / 2u; parent_index / BITS_COUNT > ARRAY_SIZE; ++count_parents_not_found) {
+            //     parent_index = (max(parent_index, 1u) - 1u) / 2u;
+            // }
+            bool need_check = true;
+            if (parent_index / BITS_COUNT < ARRAY_SIZE) {
+                uint parent_hit_bit = (1 << parent_index - (parent_index / BITS_COUNT) * BITS_COUNT);
+                need_check = (i == 0) || (hit_buffer[parent_index / BITS_COUNT][ray_index] & parent_hit_bit);
+            }
+#else
+            bool need_check = true;
+#endif
 
             bool box_intersected = false;
             float box_distance = 0;
             float tri_t = 0;
             float3 tri_normal = (0).xxx;
-            intersectMeshNode(rays[ray_index], i, need_check, box_distance, box_intersected, tri_t, tri_normal);
-            if (box_intersected) {
-                uint hit_index = i / BITS_COUNT;
-                if (hit_index < ARRAY_SIZE) {
-                    hit_buffer[hit_index][ray_index] |= (1 << (i - hit_index * BITS_COUNT));
+            { // check box intersection
+                box_intersected = false;
+                if (!need_check) {
+                    continue;
                 }
-                if (tri_t > EPSILON && (tri_t < t || t == 0)) {
-                    box_t = box_distance;
-                    t = tri_t;
-                    normal = tri_normal;
+                float box_distance = boxIntersection(rays[ray_index], mesh_tree[i]);
+                if (box_distance <= 0) { // || box_distance > voxel_grid.size / voxel_grid.dimension) {
+                    if (i == 0) {
+                        break;
+                    }
+                    continue;
+                }
+                box_t = box_distance;
+            }
+            {
+                for (int j = mesh_tree[i].start_index; j < mesh_tree[i].start_index + mesh_tree[i].count; j += 3) {
+                    float3 _tri_normal = (0).xxx;
+                    float _tri_t = triangleIntersection(rays[ray_index], mul(model_matrices[0], float4(vertices[indices[j + 0]].position, 1.f)).xyz,
+                                                             mul(model_matrices[0], float4(vertices[indices[j + 1]].position, 1.f)).xyz,
+                                                             mul(model_matrices[0], float4(vertices[indices[j + 2]].position, 1.f)).xyz,
+                                                             vertices[indices[j + 0]].normal,
+                                                             vertices[indices[j + 1]].normal,
+                                                             vertices[indices[j + 2]].normal,
+                                                             _tri_normal);
+                    if (_tri_t > 0 && (_tri_t < t || t == 0) && (_tri_t < voxel_grid.size / voxel_grid.dimension)) {
+                        t = _tri_t;
+                        normal = _tri_normal;
+                    }
                 }
             }
+#if OPTIMIZATION
+            uint hit_index = i / BITS_COUNT;
+            if (hit_index < ARRAY_SIZE) {
+                hit_buffer[hit_index][ray_index] |= (1 << (i - hit_index * BITS_COUNT));
+            }
+#endif
+            if (tri_t > 0 && (tri_t < t || t == 0)) {
+                box_t = box_distance;
+                t = tri_t;
+                normal = tri_normal;
+                found = true;
+            }
+        }
+        if (found) {
+            break;
         }
     }
-    Voxel voxel = (Voxel)0;
-    voxel.albedo.x = dispatchThreadID.x;
-    voxel.albedo.y = dispatchThreadID.y;
-    voxel.albedo.z = dispatchThreadID.z;
-    voxel.normal = normal;
-    voxel.metalness = t;
-    voxel.sharpness = box_t;
-    voxels[dispatchThreadID.x + dispatchThreadID.y * voxel_grid.dimension + dispatchThreadID.z * voxel_grid.dimension * voxel_grid.dimension] = voxel;
+
+    if (t > 0) {
+        Voxel voxel = (Voxel)0;
+        voxel.albedo.x = currentIndex.x;
+        voxel.albedo.y = currentIndex.y;
+        voxel.albedo.z = currentIndex.z;
+        // voxel.normal.x = rays[1].direction.x;
+        // voxel.normal.y = rays[1].direction.y;
+        // voxel.normal.z = rays[1].direction.z;
+        voxel.normal = normal;
+        voxel.metalness = t;
+        voxel.sharpness = asfloat(count_parents_not_found);
+        voxels[currentIndex.x + currentIndex.y * voxel_grid.dimension + currentIndex.z * voxel_grid.dimension * voxel_grid.dimension] = voxel;
+    }
 }

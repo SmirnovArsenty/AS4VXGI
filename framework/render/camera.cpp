@@ -88,6 +88,7 @@ void Camera::set_camera(Vector3 position, Vector3 forward)
 
     if (focus_) {
         camera_data_.forward = focus_target_ - camera_data_.position;
+        focus_distance_ = sqrt(camera_data_.forward.Dot(camera_data_.forward));
         camera_data_.forward.Normalize();
     }
 }

@@ -29,9 +29,9 @@ StructuredBuffer<float4x4> box_transform : register(t0);
 
 PS_VS VSMain(VS_IN input)
 {
-    PS_VS res = (PS_VS) 0;
+    PS_VS res = (PS_VS)0;
 
-    res.pos = mul(camera.vp, mul(box_transform[input.index], mul(transform, input.position)));
+    res.pos = mul(camera.vp, mul(transform, mul(box_transform[input.index], input.position)));
     res.color = float4(((255.f - input.index) / 255.f).xxx, 1.f);
 
     return res;
