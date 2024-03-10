@@ -15,26 +15,15 @@ set(group_render
     render/render.cpp
     render/render.h
 
-    render/annotation.cpp
-    render/annotation.h
-
     render/camera.cpp
     render/camera.h
 )
 
 set(group_render_resource
-    render/resource/resource.h
-
     render/resource/buffer.cpp
     render/resource/buffer.h
-    render/resource/fence.cpp
-    render/resource/fence.h
-    render/resource/material.cpp
-    render/resource/material.h
-    render/resource/sampler.cpp
-    render/resource/sampler.h
-    render/resource/shader.cpp
-    render/resource/shader.h
+    render/resource/pipeline.cpp
+    render/resource/pipeline.h
     render/resource/texture.cpp
     render/resource/texture.h
 )
@@ -55,11 +44,6 @@ set(group_render_scene_lights
     render/scene/lights/ambient.cpp
     render/scene/lights/direction.cpp
     render/scene/lights/point.cpp
-)
-
-set(group_render_utils
-    render/utils/sort_lib.cpp
-    render/utils/sort_lib.h
 )
 
 set(group_component_common

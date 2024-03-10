@@ -10,7 +10,6 @@ using namespace DirectX::SimpleMath;
 #include "component/game_component.h"
 
 #include "render/resource/texture.h"
-#include "render/resource/shader.h"
 #include "render/resource/buffer.h"
 
 class Light : public GameComponent
@@ -49,10 +48,10 @@ private:
     struct AmbientData {
         Vector4 color;
     } ambient_data_;
-    DynamicBuffer<AmbientData> ambient_buffer_;
+    //DynamicBuffer<AmbientData> ambient_buffer_;
     Vector3 color_;
 
-    GraphicsShader shader_;
+    //GraphicsShader shader_;
 };
 
 class DirectionLight : public Light
@@ -89,7 +88,7 @@ private:
         Vector4 color;
         Vector4 direction;
     } direction_data_;
-    DynamicBuffer<DirectionData> direction_buffer_;
+    //DynamicBuffer<DirectionData> direction_buffer_;
 
     Vector3 color_;
     Vector3 direction_;
@@ -102,7 +101,7 @@ private:
     ID3D11DepthStencilState* ds_state_{ nullptr };
     ID3D11BlendState* blend_state_{ nullptr };
 
-    GraphicsShader shader_;
+    //GraphicsShader shader_;
 };
 
 class PointLight : public Light
@@ -123,7 +122,7 @@ private:
         Vector4 color;
         Vector4 position_radius;
     } point_data_;
-    DynamicBuffer<PointData> point_buffer_;
+    //DynamicBuffer<PointData> point_buffer_;
 
     Vector3 color_;
     Vector3 position_;
@@ -131,10 +130,10 @@ private:
 
     std::vector<Vector3> vertices_;
     std::vector<uint32_t> indices_;
-    VertexBuffer vertex_buffer_;
-    IndexBuffer index_buffer_;
+    //VertexBuffer vertex_buffer_;
+    //IndexBuffer index_buffer_;
 
     ID3D11RasterizerState* rasterizer_state_{ nullptr };
 
-    GraphicsShader shader_;
+    //GraphicsShader shader_;
 };

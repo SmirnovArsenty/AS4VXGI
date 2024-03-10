@@ -1,6 +1,6 @@
 #include "core/game.h"
 #include "render/render.h"
-#include "render/d3d11_common.h"
+#include "render/common.h"
 
 #include "render/resource/texture.h"
 #include "material.h"

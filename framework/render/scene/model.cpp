@@ -12,7 +12,7 @@
 #include "render/resource/texture.h"
 #include "model.h"
 #include "mesh.h"
-#include "render/d3d11_common.h"
+#include "render/common.h"
 
 // public
 Model::Model(const std::string& filename) :

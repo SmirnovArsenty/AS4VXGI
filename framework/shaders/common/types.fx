@@ -1,7 +1,7 @@
 #ifndef __TYPES_FX__
 #define __TYPES_FX__
 
-#include "framework/shaders/common/translate.fx"
+#include "../../../framework/shaders/common/translate.fx"
 
 struct CameraData
 {
@@ -15,16 +15,47 @@ struct CameraData
     float screen_height;
 };
 
+struct Voxel
+{
+    FLOAT3 normal;
+    float sharpness;
+    FLOAT3 albedo;
+    float metalness;
+};
+
+struct Vertex
+{
+    FLOAT3 position;
+    float uv_x;
+    float uv_y;
+    FLOAT3 normal;
+};
+
+struct MeshTreeNode
+{
+    FLOAT3 min;
+    int start_index;
+    FLOAT3 max;
+    int count;
+};
+
+struct VoxelGrid
+{
+    int dimension;
+    float size;
+    UINT mesh_node_count;
+    float dummy;
+};
+
+CBUFFER CB_COMMON : REGISTER(b0)
+{
+    CameraData cameraData;
+    VoxelGrid voxelGrid;
+};
+
 #ifndef __cplusplus
 
-#ifndef CAMERA_REGISTER
-#error CAMERA_REGISTER is undefined
-#endif
-
-cbuffer __CameraData__ : register(CAMERA_REGISTER)
-{
-    CameraData camera;
-}
+RWStructuredBuffer<Voxel> voxels : register(u0);
 
 #endif
 

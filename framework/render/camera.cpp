@@ -22,12 +22,10 @@ Camera::~Camera()
 
 void Camera::initialize()
 {
-    dynamic_camera_buffer_.initialize(&camera_data_);
 }
 
 void Camera::destroy()
 {
-    dynamic_camera_buffer_.destroy();
 }
 
 void Camera::update()
@@ -41,20 +39,8 @@ void Camera::update()
         camera_data_.screen_width = Game::inst()->win().screen_width();
         camera_data_.screen_height = Game::inst()->win().screen_height();
 
-        dynamic_camera_buffer_.update(&camera_data_);
         durty_ = false;
     }
-}
-
-void Camera::bind()
-{
-    auto context = Game::inst()->render().context();
-    context->VSSetConstantBuffers(0, 1, &dynamic_camera_buffer_.getBuffer());
-    context->HSSetConstantBuffers(0, 1, &dynamic_camera_buffer_.getBuffer());
-    context->DSSetConstantBuffers(0, 1, &dynamic_camera_buffer_.getBuffer());
-    context->GSSetConstantBuffers(0, 1, &dynamic_camera_buffer_.getBuffer());
-    context->PSSetConstantBuffers(0, 1, &dynamic_camera_buffer_.getBuffer());
-    context->CSSetConstantBuffers(0, 1, &dynamic_camera_buffer_.getBuffer());
 }
 
 float Camera::get_near() const

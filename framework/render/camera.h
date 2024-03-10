@@ -23,9 +23,6 @@ public:
     void destroy();
     void update();
 
-    // always bind to register(b0)
-    void bind();
-
     float get_near() const;
     float get_far() const;
     float get_fov() const;
@@ -62,7 +59,6 @@ private:
     bool durty_{ true };
 
     CameraData camera_data_;
-    DynamicBuffer<CameraData> dynamic_camera_buffer_;
 
     CameraType type_{ CameraType::perspective };
     bool focus_{ true };

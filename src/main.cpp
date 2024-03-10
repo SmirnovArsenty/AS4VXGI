@@ -2,7 +2,7 @@
 #include "core/game.h"
 #include "as4vxgi.h"
 
-#pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "dxguid.lib")
@@ -15,6 +15,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, char*, int)
     //     fclose(pix);
     //     LoadLibrary("WinPixGpuCapturer.dll");
     // }
+
     Game::inst()->add_component(new AS4VXGI_Component{});
 
     Game::inst()->initialize(800, 800);

@@ -3,7 +3,6 @@
 #include "win32/win.h"
 #include "win32/input.h"
 #include "render/render.h"
-#include "render/annotation.h"
 // #include "render/scene/scene.h"
 #include "render/camera.h"
 #include "component/game_component.h"
@@ -70,9 +69,7 @@ void Game::run()
         {
             // prepares
             {
-                Annotation annotation("prepare resources");
                 render_->prepare_frame();
-                render_->prepare_resources();
             }
 
             { // update components
@@ -84,7 +81,6 @@ void Game::run()
             }
 
             {
-                Annotation annotation("draw scene");
                 // scene_->draw();
                 for (auto game_component : game_components_)
                 {
@@ -94,7 +90,6 @@ void Game::run()
 
             // Handle components imgui
             {
-                Annotation annotation("draw imgui for components");
                 render_->prepare_imgui();
                 for (auto game_component : game_components_)
                 {
@@ -103,9 +98,7 @@ void Game::run()
                 render_->end_imgui();
             }
             {
-                Annotation annotation("after draw");
-                render_->restore_targets();
-                render_->end_frame();
+                render_->present();
             }
         }
 

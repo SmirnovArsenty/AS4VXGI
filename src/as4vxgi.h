@@ -2,6 +2,7 @@
 
 #include "component/game_component.h"
 #include "math/model_tree.h"
+#include "render/resource/pipeline.h"
 
 #include "resources/shaders/voxels/voxel.fx"
 
@@ -20,37 +21,35 @@ public:
 private:
     std::vector<ModelTree*> model_trees_;
 
-    // sync mechanism
-    struct {
-        int32_t data[4]{};
-    } complete_data_;
-    UnorderedAccessBuffer<decltype(complete_data_)> complete_buffer_;
-    ReadbackBuffer<uint32_t> complete_buffer_cpu_;
-    ComputeShader shader_complete_;
-    // ComputeShader shader_complete_reset_;
-    void fence();
+    ComPtr<ID3D12DescriptorHeap> resources_heap_;
 
     // voxels storage
-    UnorderedAccessBuffer<Voxel> voxels_;
+    // UnorderedAccessBuffer<Voxel> voxels_;
 
     /////
     // stage1 - clear storage
+    ComPtr<ID3D12GraphicsCommandList> stage_1_clear_voxel_grid_compute_command_list_;
+    ComputePipeline* stage_1_pipeline_ = nullptr;
     /////
 
-    ComputeShader shader_voxels_clear_;
+    // ComputeShader shader_voxels_clear_;
 
     /////
     // stage2 - fill storage with vertices params
+    ComPtr<ID3D12GraphicsCommandList> stage_2_fill_voxel_grid_compute_command_list_;
+    ComputePipeline* stage_2_pipeline_ = nullptr;
     /////
 
-    std::vector<std::vector<ShaderResource<MeshTreeNode>*>> mesh_trees_;
-    ComputeShader shader_voxels_fill_;
-    std::vector<std::vector<ID3D11ShaderResourceView*>> index_buffers_srv_;
-    std::vector<std::vector<ID3D11ShaderResourceView*>> vertex_buffers_srv_;
-    std::vector<std::vector<ShaderResource<Matrix>*>> model_matrix_srv_;
-    VoxelGrid voxel_grid_params_;
-    DynamicBuffer<decltype(voxel_grid_params_)> voxel_grid_params_buffer_;
+    // std::vector<std::vector<ShaderResource<MeshTreeNode>*>> mesh_trees_;
+    // ComputeShader shader_voxels_fill_;
+    // std::vector<std::vector<ID3D11ShaderResourceView*>> index_buffers_srv_;
+    // std::vector<std::vector<ID3D11ShaderResourceView*>> vertex_buffers_srv_;
+    // std::vector<std::vector<ShaderResource<Matrix>*>> model_matrix_srv_;
+    // VoxelGrid voxel_grid_params_;
+    // DynamicBuffer<decltype(voxel_grid_params_)> voxel_grid_params_buffer_;
 // #ifndef NDEBUG
-    GraphicsShader shader_voxels_draw_;
+    ComPtr<ID3D12GraphicsCommandList> stage_visualize_voxel_grid_graphics_command_list_;
+    GraphicsPipeline* stage_visualize_pipeline_ = nullptr;
+    // GraphicsShader shader_voxels_draw_;
 // #endif
 };

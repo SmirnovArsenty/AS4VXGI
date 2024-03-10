@@ -1,8 +1,4 @@
-#define CAMERA_REGISTER b0
-#define VOXEL_GRID_REGISTER b1
-#include "resources/shaders/voxels/voxel.fx"
-
-RWStructuredBuffer<Voxel> voxels : register(u0);
+#include "voxel.fx"
 
 [numthreads(256,1,1)]
 void CSMain( uint3 id : SV_DispatchThreadID ) {

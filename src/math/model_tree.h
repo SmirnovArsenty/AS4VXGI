@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 #include <unordered_map>
 
 #include <assimp/scene.h>
@@ -8,9 +9,6 @@
 
 #include "render/resource/buffer.h"
 #include "render/resource/texture.h"
-#include "render/resource/sampler.h"
-#include "render/resource/material.h"
-#include "render/resource/shader.h"
 
 #include "SimpleMath.h"
 using namespace DirectX::SimpleMath;
@@ -36,8 +34,10 @@ public:
 
     void draw(Camera* camera);
 
-    std::vector<ID3D11ShaderResourceView*> get_index_buffers_srv();
-    std::vector<ID3D11ShaderResourceView*> get_vertex_buffers_srv();
+    //std::vector<ID3D11ShaderResourceView*> get_index_buffers_srv();
+    //std::vector<ID3D11ShaderResourceView*> get_vertex_buffers_srv();
+    std::vector<std::vector<uint32_t>> get_meshes_indices();
+    std::vector<std::vector<Vertex>> get_meshes_vertices();
     Matrix get_transform() const { return dynamic_model_data_.transform; }
 
     std::vector<std::vector<MeshTreeNode>> get_meshes_trees();
@@ -48,7 +48,7 @@ private:
         Mesh() = default;
         ~Mesh() = default;
 
-        void initialize(Material& material,
+        void initialize(//Material& material,
                         const std::vector<uint32_t>& indices,
                         const std::vector<Vertex>& vertices,
                         float min[3], float max[3]);
@@ -60,12 +60,15 @@ private:
         void debug_draw();
 #endif
 
-        ID3D11ShaderResourceView* get_index_buffer_srv() { return index_buffer_resource_view_.getSRV(); }
-        ID3D11ShaderResourceView* get_vertex_buffer_srv() { return vertex_buffer_resource_view_.getSRV(); }
+        // ID3D11ShaderResourceView* get_index_buffer_srv() { return index_buffer_resource_view_.getSRV(); }
+        // ID3D11ShaderResourceView* get_vertex_buffer_srv() { return vertex_buffer_resource_view_.getSRV(); }
+
+        const std::vector<uint32_t>& get_indices() const;
+        const std::vector<Vertex>& get_vertices() const;
 
         std::vector<MeshTreeNode> get_mesh_tree() const;
     private:
-        Material material_;
+        // Material material_;
 
         // mesh extents
         float min_[3];
@@ -75,20 +78,20 @@ private:
         std::vector<Vertex> vertices_;
 
         UINT index_count_{ 0 };
-        IndexBuffer index_buffer_;
-        VertexBuffer vertex_buffer_;
-        ShaderResource<uint32_t> index_buffer_resource_view_;
-        ShaderResource<Vertex> vertex_buffer_resource_view_;
+        // IndexBuffer index_buffer_;
+        // VertexBuffer vertex_buffer_;
+        // ShaderResource<uint32_t> index_buffer_resource_view_;
+        // ShaderResource<Vertex> vertex_buffer_resource_view_;
 
         std::unordered_map<int32_t, MeshTreeNode> mesh_tree_;
 
         void split_vertices(float min[3], float max[3], int32_t start, int32_t count, int32_t current_mesh_node_index);
 
 #ifndef NDEBUG
-        ShaderResource<Matrix> box_transformations_;
-        GraphicsShader box_shader_;
-        IndexBuffer box_index_buffer_;
-        VertexBuffer box_vertex_buffer_;
+        // ShaderResource<Matrix> box_transformations_;
+        // GraphicsShader box_shader_;
+        // IndexBuffer box_index_buffer_;
+        // VertexBuffer box_vertex_buffer_;
 #endif
     };
 
@@ -106,12 +109,12 @@ private:
         Matrix transform;
         Matrix inverse_transpose_transform;
     } dynamic_model_data_;
-    DynamicBuffer<decltype(dynamic_model_data_)> dynamic_model_buffer_;
+    // DynamicBuffer<decltype(dynamic_model_data_)> dynamic_model_buffer_;
 
     // renderstate
-    ID3D11RasterizerState* rasterizer_state_{ nullptr };
+    // ID3D11RasterizerState* rasterizer_state_{ nullptr };
 
     // debug shaders
-    GraphicsShader albedo_shader_;
-    GraphicsShader normal_shader_;
+    // GraphicsShader albedo_shader_;
+    // GraphicsShader normal_shader_;
 };

@@ -13,6 +13,8 @@ struct DummyStructure{};
 #define FLOAT4 Vector4
 #define MATRIX Matrix
 // UINT is known
+#define REGISTER(...) public DummyStructure
+#define CBUFFER struct
 
 #else
 
@@ -21,6 +23,8 @@ struct DummyStructure{};
 #define FLOAT4 float4
 #define MATRIX float4x4
 #define UINT uint
+#define REGISTER(reg) register(reg)
+#define CBUFFER cbuffer
 
 #endif
 

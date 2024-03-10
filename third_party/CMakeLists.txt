@@ -29,8 +29,8 @@ set(imgui_sources
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imstb_rectpack.h
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imstb_textedit.h
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imstb_truetype.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends/imgui_impl_dx11.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends/imgui_impl_dx11.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends/imgui_impl_dx12.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends/imgui_impl_dx12.h
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends/imgui_impl_win32.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends/imgui_impl_win32.h
 )
