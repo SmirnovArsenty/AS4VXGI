@@ -40,22 +40,26 @@ void AS4VXGI_Component::initialize()
 
     {
         // create command lists
-        auto& graphics_allocator = Game::inst()->render().graphics_command_allocator();
-        auto& compute_allocator = Game::inst()->render().compute_command_allocator();
 
-        if (0)
+        if (1)
         {
             stage_1_pipeline_ = new ComputePipeline();
             stage_1_pipeline_->attach_compute_shader(L"./resources/shaders/voxels/clear.hlsl", {});
-            HRESULT_CHECK(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, compute_allocator.Get(), stage_1_pipeline_->get_pso(), IID_PPV_ARGS(stage_1_clear_voxel_grid_compute_command_list_.GetAddressOf())));
-            HRESULT_CHECK(stage_1_clear_voxel_grid_compute_command_list_->Close());
+
+            stage_1_pipeline_->declare_bind<CB_COMMON>();
+            stage_1_pipeline_->declare_bind<VOXELS>();
+
+            stage_1_pipeline_->create_command_list();
         }
-        if (0)
+        if (1)
         {
             stage_2_pipeline_ = new ComputePipeline();
             stage_2_pipeline_->attach_compute_shader(L"./resources/shaders/voxels/fill.hlsl", {});
-            HRESULT_CHECK(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, compute_allocator.Get(), stage_2_pipeline_->get_pso(), IID_PPV_ARGS(stage_2_fill_voxel_grid_compute_command_list_.GetAddressOf())));
-            HRESULT_CHECK(stage_2_fill_voxel_grid_compute_command_list_->Close());
+
+            stage_2_pipeline_->declare_bind<CB_COMMON>();
+            stage_2_pipeline_->declare_bind<VOXELS>();
+
+            stage_2_pipeline_->create_command_list();
         }
         if (1)
         {
@@ -70,8 +74,11 @@ void AS4VXGI_Component::initialize()
             stage_visualize_pipeline_->attach_vertex_shader(L"./resources/shaders/voxels/draw.hlsl", {});
             stage_visualize_pipeline_->attach_geometry_shader(L"./resources/shaders/voxels/draw.hlsl", {});
             stage_visualize_pipeline_->attach_pixel_shader(L"./resources/shaders/voxels/draw.hlsl", {});
-            HRESULT_CHECK(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, graphics_allocator.Get(), stage_visualize_pipeline_->get_pso(), IID_PPV_ARGS(stage_visualize_voxel_grid_graphics_command_list_.GetAddressOf())));
-            HRESULT_CHECK(stage_visualize_voxel_grid_graphics_command_list_->Close());
+
+            stage_visualize_pipeline_->declare_bind<CB_COMMON>();
+            stage_visualize_pipeline_->declare_bind<VOXELS>();
+
+            stage_visualize_pipeline_->create_command_list();
         }
     }
 
@@ -137,7 +144,7 @@ void AS4VXGI_Component::draw()
         // clear voxel grid
         {
             // stage 1
-            stage_1_clear_voxel_grid_compute_command_list_->Dispatch(align(voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 256) / 256, 1, 1);
+            stage_1_pipeline_->add_cmd()->Dispatch(align(voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 256) / 256, 1, 1);
         }
 
         // fill voxels grid params
@@ -156,7 +163,7 @@ void AS4VXGI_Component::draw()
             //         context->CSSetShaderResources(2, 1, &vertex_buffers_srv_[i][j]);
             //         context->CSSetShaderResources(3, 1, &model_matrix_srv_[i][j]->getSRV());
             // 
-                    stage_2_fill_voxel_grid_compute_command_list_->Dispatch(align(voxel_grid_dim, 4) / 4,
+                    stage_2_pipeline_->add_cmd()->Dispatch(align(voxel_grid_dim, 4) / 4,
                                                                             align(voxel_grid_dim, 4) / 4,
                                                                             align(voxel_grid_dim, 4) / 4);
             // 
@@ -179,7 +186,7 @@ void AS4VXGI_Component::draw()
                 // 
                 // context->VSSetShaderResources(0, 1, &voxels_.getSRV());
 
-                stage_visualize_voxel_grid_graphics_command_list_->DrawInstanced(1, voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 0, 0);
+                stage_visualize_pipeline_->add_cmd()->DrawInstanced(1, voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 0, 0);
             }
 // #endif
         }
@@ -246,15 +253,12 @@ void AS4VXGI_Component::update()
 
 void AS4VXGI_Component::destroy_resources()
 {
-    stage_visualize_voxel_grid_graphics_command_list_.Reset();
     delete stage_visualize_pipeline_;
     stage_visualize_pipeline_ = nullptr;
 
-    stage_2_fill_voxel_grid_compute_command_list_.Reset();
     delete stage_2_pipeline_;
     stage_2_pipeline_ = nullptr;
 
-    stage_1_clear_voxel_grid_compute_command_list_.Reset();
     delete stage_1_pipeline_;
     stage_1_pipeline_ = nullptr;
 //    for (std::vector<ShaderResource<Matrix>*>& vector_matrix_srv : model_matrix_srv_) {

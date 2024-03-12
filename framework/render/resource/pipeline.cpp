@@ -19,7 +19,6 @@ void CompileShader(std::wstring path, const std::vector<std::wstring>& defines, 
     DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&utils));
     DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&compiler));
 
-
     WCHAR cwd[256];
     GetCurrentDirectoryW(256, cwd);
 
@@ -70,20 +69,54 @@ void CompileShader(std::wstring path, const std::vector<std::wstring>& defines, 
     result->GetOutput(DXC_OUT_OBJECT, iid, ppvObject, &shader_name);
 }
 
-GraphicsPipeline::GraphicsPipeline()
+#pragma region ================================================================================================Pipeline================================================================================================
+
+void Pipeline::create_root_signature()
 {
     auto device = Game::inst()->render().device();
 
-    // initialize empty root signature
-    CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc;
-    root_signature_desc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+    D3D12_FEATURE_DATA_ROOT_SIGNATURE feature_data = { D3D_ROOT_SIGNATURE_VERSION_1_1 };
+    if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data)))) {
+        feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+    }
+
+    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
+    root_signature_desc.Init_1_1(static_cast<UINT>(root_signature_params_.size()), root_signature_params_.data(), 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
     ComPtr<ID3DBlob> signature;
     ComPtr<ID3DBlob> error;
-    HRESULT_CHECK(D3D12SerializeRootSignature(&root_signature_desc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
-    HRESULT_CHECK(device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&root_signature_)));
 
-    pso_desc_.pRootSignature = root_signature_.Get();
+    HRESULT status = D3DX12SerializeVersionedRootSignature(&root_signature_desc, feature_data.HighestVersion, &signature, &error);
+    if (FAILED(status))
+    {
+        OutputDebugString((char*)error->GetBufferPointer());
+        assert(false);
+    }
+    HRESULT_CHECK(device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(root_signature_.GetAddressOf())));
+}
+
+void Pipeline::declare_range(D3D12_DESCRIPTOR_RANGE_TYPE range_type, UINT slot, UINT space)
+{
+    CD3DX12_DESCRIPTOR_RANGE1 range;
+    range.Init(range_type, 1, slot, space, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+
+    CD3DX12_ROOT_PARAMETER1 param;
+    param.InitAsDescriptorTable(1, &range, D3D12_SHADER_VISIBILITY_ALL);
+
+    root_signature_params_.push_back(param);
+}
+
+ID3D12GraphicsCommandList* Pipeline::add_cmd()
+{
+    return command_list_.Get();
+}
+
+#pragma endregion
+
+#pragma region ================================================================================================Graphics================================================================================================
+
+GraphicsPipeline::GraphicsPipeline()
+{
     pso_desc_.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
     pso_desc_.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
     pso_desc_.DepthStencilState.DepthEnable = FALSE;
@@ -92,7 +125,22 @@ GraphicsPipeline::GraphicsPipeline()
     pso_desc_.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pso_desc_.NumRenderTargets = 1;
     pso_desc_.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    /// TODO: pso_desc_.DSVFormat = ;
     pso_desc_.SampleDesc.Count = 1;
+}
+
+GraphicsPipeline::~GraphicsPipeline()
+{
+    command_list_.Reset();
+    pso_.Reset();
+
+    pixel_shader_.Reset();
+    vertex_shader_.Reset();
+    geometry_shader_.Reset();
+
+    vertex_buffer_.Reset();
+
+    root_signature_.Reset();
 }
 
 void GraphicsPipeline::setup_input_layout(const D3D12_INPUT_ELEMENT_DESC* inputElementDescs, uint32_t size)
@@ -121,32 +169,39 @@ void GraphicsPipeline::attach_pixel_shader(const std::wstring& path, const std::
     pso_desc_.PS = CD3DX12_SHADER_BYTECODE(pixel_shader_->GetBufferPointer(), pixel_shader_->GetBufferSize());
 }
 
-ID3D12PipelineState* GraphicsPipeline::get_pso()
+void GraphicsPipeline::create_command_list()
 {
-    auto device = Game::inst()->render().device();
-    if (!pso_) {
-        HRESULT_CHECK(device->CreateGraphicsPipelineState(&pso_desc_, IID_PPV_ARGS(&pso_)));
-    }
-    return pso_.Get();
+    assert(command_list_.Get() == nullptr);
+
+    auto& device = Game::inst()->render().device();
+    auto& allocator = Game::inst()->render().graphics_command_allocator();
+
+    create_root_signature();
+    pso_desc_.pRootSignature = root_signature_.Get();
+    HRESULT_CHECK(device->CreateGraphicsPipelineState(&pso_desc_, IID_PPV_ARGS(pso_.ReleaseAndGetAddressOf())));
+    HRESULT_CHECK(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator.Get(), pso_.Get(), IID_PPV_ARGS(command_list_.ReleaseAndGetAddressOf())));
+    HRESULT_CHECK(command_list_->Close());
 }
+
+#pragma endregion
+
+#pragma region ================================================================================================Compute================================================================================================
 
 ComputePipeline::ComputePipeline()
 {
-    auto device = Game::inst()->render().device();
-
-    // initialize empty root signature
-    CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc;
-    root_signature_desc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED | D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED);
-
-    ComPtr<ID3DBlob> signature;
-    ComPtr<ID3DBlob> error;
-    HRESULT_CHECK(D3D12SerializeRootSignature(&root_signature_desc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
-    HRESULT_CHECK(device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(root_signature_.GetAddressOf())));
-
-    pso_desc_.pRootSignature = root_signature_.Get();
     pso_desc_.NodeMask = 0;
-    pso_desc_.CachedPSO = D3D12_CACHED_PIPELINE_STATE{nullptr, 0};
+    pso_desc_.CachedPSO = D3D12_CACHED_PIPELINE_STATE{ nullptr, 0 };
     pso_desc_.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+}
+
+ComputePipeline::~ComputePipeline()
+{
+    command_list_.Reset();
+    pso_.Reset();
+
+    compute_shader_.Reset();
+
+    root_signature_.Reset();
 }
 
 void ComputePipeline::attach_compute_shader(const std::wstring& path, const std::vector<std::wstring>& defines)
@@ -156,11 +211,18 @@ void ComputePipeline::attach_compute_shader(const std::wstring& path, const std:
     pso_desc_.CS = CD3DX12_SHADER_BYTECODE(compute_shader_->GetBufferPointer(), compute_shader_->GetBufferSize());
 }
 
-ID3D12PipelineState* ComputePipeline::get_pso()
+void ComputePipeline::create_command_list()
 {
-    auto device = Game::inst()->render().device();
-    if (!pso_) {
-        HRESULT_CHECK(device->CreateComputePipelineState(&pso_desc_, IID_PPV_ARGS(&pso_)));
-    }
-    return pso_.Get();
+    assert(command_list_.Get() == nullptr);
+
+    auto& device = Game::inst()->render().device();
+    auto& allocator = Game::inst()->render().compute_command_allocator();
+
+    create_root_signature();
+    pso_desc_.pRootSignature = root_signature_.Get();
+    HRESULT_CHECK(device->CreateComputePipelineState(&pso_desc_, IID_PPV_ARGS(pso_.ReleaseAndGetAddressOf())));
+    HRESULT_CHECK(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, allocator.Get(), pso_.Get(), IID_PPV_ARGS(command_list_.ReleaseAndGetAddressOf())));
+    HRESULT_CHECK(command_list_->Close());
 }
+
+#pragma endregion

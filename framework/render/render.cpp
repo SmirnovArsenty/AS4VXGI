@@ -36,10 +36,6 @@ void Render::initialize()
 
     HRESULT_CHECK(CreateDXGIFactory(IID_PPV_ARGS(&factory_)));
 
-#if 1
-    factory_->EnumWarpAdapter(IID_PPV_ARGS(&adapter_));
-    D3D12CreateDevice(adapter_.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device_));
-#else
     {
         int32_t best_adapter_index = 0;
         int32_t adapter_number = 0;
@@ -62,7 +58,7 @@ void Render::initialize()
         factory_->EnumAdapters(best_adapter_index, &adapter_);
         D3D12CreateDevice(adapter_.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device_));
     }
-#endif
+
 
 #if !defined(NDEBUG)
 
@@ -187,6 +183,7 @@ void Render::create_descriptor_heap()
     resource_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     resource_heap_desc.NodeMask = 0;
     HRESULT_CHECK(device_->CreateDescriptorHeap(&resource_heap_desc, IID_PPV_ARGS(resource_descriptor_heap_.ReleaseAndGetAddressOf())));
+    resource_descriptor_size_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     D3D12_DESCRIPTOR_HEAP_DESC sampler_heap_desc = {};
     sampler_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
@@ -194,6 +191,7 @@ void Render::create_descriptor_heap()
     sampler_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     sampler_heap_desc.NodeMask = 0;
     HRESULT_CHECK(device_->CreateDescriptorHeap(&sampler_heap_desc, IID_PPV_ARGS(sampler_descriptor_heap_.ReleaseAndGetAddressOf())));
+    sampler_descriptor_size_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 }
 
 void Render::create_fence()

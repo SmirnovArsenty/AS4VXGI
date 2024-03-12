@@ -47,16 +47,12 @@ struct VoxelGrid
     float dummy;
 };
 
-CBUFFER CB_COMMON : REGISTER(b0)
+DECLARE_CBV(CB_COMMON, 0, 0)
 {
     CameraData cameraData;
     VoxelGrid voxelGrid;
 };
 
-#ifndef __cplusplus
-
-RWStructuredBuffer<Voxel> voxels : register(u0);
-
-#endif
+DECLARE_UAV(VOXELS, Voxel, 0, 0)
 
 #endif // __TYPES_FX__

@@ -21,6 +21,8 @@ public:
 private:
     std::vector<ModelTree*> model_trees_;
 
+    CB_COMMON cb_common_;
+
     ComPtr<ID3D12DescriptorHeap> resources_heap_;
 
     // voxels storage
@@ -28,7 +30,6 @@ private:
 
     /////
     // stage1 - clear storage
-    ComPtr<ID3D12GraphicsCommandList> stage_1_clear_voxel_grid_compute_command_list_;
     ComputePipeline* stage_1_pipeline_ = nullptr;
     /////
 
@@ -36,7 +37,6 @@ private:
 
     /////
     // stage2 - fill storage with vertices params
-    ComPtr<ID3D12GraphicsCommandList> stage_2_fill_voxel_grid_compute_command_list_;
     ComputePipeline* stage_2_pipeline_ = nullptr;
     /////
 
@@ -48,7 +48,6 @@ private:
     // VoxelGrid voxel_grid_params_;
     // DynamicBuffer<decltype(voxel_grid_params_)> voxel_grid_params_buffer_;
 // #ifndef NDEBUG
-    ComPtr<ID3D12GraphicsCommandList> stage_visualize_voxel_grid_graphics_command_list_;
     GraphicsPipeline* stage_visualize_pipeline_ = nullptr;
     // GraphicsShader shader_voxels_draw_;
 // #endif

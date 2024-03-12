@@ -13,8 +13,19 @@ struct DummyStructure{};
 #define FLOAT4 Vector4
 #define MATRIX Matrix
 // UINT is known
-#define REGISTER(...) public DummyStructure
-#define CBUFFER struct
+struct CBV {};
+struct SRV {};
+struct UAV {};
+template<class t, UINT sl, UINT sp>
+struct BindInfo
+{
+    t type() {return t{}};
+    UINT slot() {return sl;};
+    UINT space() {return sp;};
+};
+#define DECLARE_CBV(NAME, SLOT, SPACE) struct NAME : public BindInfo<CBV, SLOT, SPACE>
+#define DECLARE_SRV(NAME, SLOT, SPACE) struct NAME : public BindInfo<SRV, SLOT, SPACE> {};
+#define DECLARE_UAV(NAME, TYPE, SLOT, SPACE) struct NAME : public BindInfo<UAV, SLOT, SPACE> {};
 
 #else
 
@@ -23,8 +34,10 @@ struct DummyStructure{};
 #define FLOAT4 float4
 #define MATRIX float4x4
 #define UINT uint
-#define REGISTER(reg) register(reg)
-#define CBUFFER cbuffer
+
+#define DECLARE_CBV(NAME, SLOT, SPACE) cbuffer NAME : register(b##SLOT, space##SPACE)
+#define DECLARE_SRV(NAME, SLOT, SPACE) Texture2D NAME : register(t##SLOT, space##SPACE);
+#define DECLARE_UAV(NAME, TYPE, SLOT, SPACE) RWStructuredBuffer<TYPE> NAME : register(u##SLOT, space##SPACE);
 
 #endif
 
