@@ -1,5 +1,7 @@
 #pragma once
 
+#include "render/common.h"
+
 #include <string>
 #include <wrl.h>
 #include <dxcapi.h>
@@ -13,7 +15,7 @@ private:
     void declare_range(D3D12_DESCRIPTOR_RANGE_TYPE range_type, UINT slot, UINT space);
 protected:
     ComPtr<ID3D12RootSignature> root_signature_;
-    std::vector<D3D12_ROOT_PARAMETER1> root_signature_params_;
+    std::vector<CD3DX12_DESCRIPTOR_RANGE1> descriptor_ranges_;
 
     ComPtr<ID3D12PipelineState> pso_;
 

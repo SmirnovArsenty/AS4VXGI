@@ -47,7 +47,7 @@ struct VoxelGrid
     float dummy;
 };
 
-DECLARE_CBV(CB_COMMON, 0, 0)
+DECLARE_CBV(COMMON, 0, 0)
 {
     CameraData cameraData;
     VoxelGrid voxelGrid;

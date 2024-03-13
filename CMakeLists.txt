@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.8)
 
+set(CMAKE_SYSTEM_VERSION "10.0.22621.0")
+
 project(as4vxgi)
 
 ### dependencies

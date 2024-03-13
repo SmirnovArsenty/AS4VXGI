@@ -1,5 +1,6 @@
 #pragma once
 
+#include "render/common.h"
 #include "component/game_component.h"
 #include "math/model_tree.h"
 #include "render/resource/pipeline.h"
@@ -21,7 +22,7 @@ public:
 private:
     std::vector<ModelTree*> model_trees_;
 
-    CB_COMMON cb_common_;
+    COMMON cb_common_;
 
     ComPtr<ID3D12DescriptorHeap> resources_heap_;
 

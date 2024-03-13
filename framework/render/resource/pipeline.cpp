@@ -1,16 +1,11 @@
-#include <sstream>
-
-#include "render/common.h"
-
 #include "pipeline.h"
 #include "core/game.h"
 #include "render/render.h"
 
+#include <sstream>
 #include <d3d12shader.h>
 
-
 #pragma comment(lib, "dxcompiler.lib")
-
 
 void CompileShader(std::wstring path, const std::vector<std::wstring>& defines, const wchar_t* main, const wchar_t* version, _In_ REFIID iid, _COM_Outptr_opt_result_maybenull_ void** ppvObject)
 {
@@ -80,8 +75,14 @@ void Pipeline::create_root_signature()
         feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
     }
 
+    std::vector<CD3DX12_ROOT_PARAMETER1> params;
+    for (auto& range : descriptor_ranges_) {
+        params.push_back({});
+        params.back().InitAsDescriptorTable(1, &range, D3D12_SHADER_VISIBILITY_ALL);
+    }
+
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
-    root_signature_desc.Init_1_1(static_cast<UINT>(root_signature_params_.size()), root_signature_params_.data(), 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+    root_signature_desc.Init_1_1(static_cast<UINT>(params.size()), params.data(), 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
     ComPtr<ID3DBlob> signature;
     ComPtr<ID3DBlob> error;
@@ -97,13 +98,8 @@ void Pipeline::create_root_signature()
 
 void Pipeline::declare_range(D3D12_DESCRIPTOR_RANGE_TYPE range_type, UINT slot, UINT space)
 {
-    CD3DX12_DESCRIPTOR_RANGE1 range;
-    range.Init(range_type, 1, slot, space, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-
-    CD3DX12_ROOT_PARAMETER1 param;
-    param.InitAsDescriptorTable(1, &range, D3D12_SHADER_VISIBILITY_ALL);
-
-    root_signature_params_.push_back(param);
+    descriptor_ranges_.push_back({});
+    descriptor_ranges_.back().Init(range_type, 1, slot, space, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
 }
 
 ID3D12GraphicsCommandList* Pipeline::add_cmd()

@@ -46,7 +46,7 @@ void AS4VXGI_Component::initialize()
             stage_1_pipeline_ = new ComputePipeline();
             stage_1_pipeline_->attach_compute_shader(L"./resources/shaders/voxels/clear.hlsl", {});
 
-            stage_1_pipeline_->declare_bind<CB_COMMON>();
+            stage_1_pipeline_->declare_bind<COMMON>();
             stage_1_pipeline_->declare_bind<VOXELS>();
 
             stage_1_pipeline_->create_command_list();
@@ -56,7 +56,7 @@ void AS4VXGI_Component::initialize()
             stage_2_pipeline_ = new ComputePipeline();
             stage_2_pipeline_->attach_compute_shader(L"./resources/shaders/voxels/fill.hlsl", {});
 
-            stage_2_pipeline_->declare_bind<CB_COMMON>();
+            stage_2_pipeline_->declare_bind<COMMON>();
             stage_2_pipeline_->declare_bind<VOXELS>();
 
             stage_2_pipeline_->create_command_list();
@@ -75,7 +75,7 @@ void AS4VXGI_Component::initialize()
             stage_visualize_pipeline_->attach_geometry_shader(L"./resources/shaders/voxels/draw.hlsl", {});
             stage_visualize_pipeline_->attach_pixel_shader(L"./resources/shaders/voxels/draw.hlsl", {});
 
-            stage_visualize_pipeline_->declare_bind<CB_COMMON>();
+            stage_visualize_pipeline_->declare_bind<COMMON>();
             stage_visualize_pipeline_->declare_bind<VOXELS>();
 
             stage_visualize_pipeline_->create_command_list();
