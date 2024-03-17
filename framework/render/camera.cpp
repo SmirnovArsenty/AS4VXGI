@@ -3,10 +3,12 @@
 #include <cmath>
 #include <sstream>
 
+
 #include "core/game.h"
 #include "win32/win.h"
 #include "camera.h"
 
+#include "render/common.h"
 #include "render/render.h"
 #include "render/scene/light.h"
 

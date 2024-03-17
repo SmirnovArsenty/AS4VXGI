@@ -1,4 +1,5 @@
 #include "core/game.h"
+#include "render/common.h"
 #include "render/render.h"
 // #include "render/resource/shader_cache.h"
 #include "render/scene/light.h"

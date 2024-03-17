@@ -1,15 +1,9 @@
 #define CAMERA_REGISTER b0
 #define VOXEL_GRID_REGISTER b1
-#include "resources/shaders/voxels/voxel.fx"
-
-// u- slots
-RWStructuredBuffer<Voxel> voxels : register(u0);
+#include "voxel.fx"
 
 // t- slots
-StructuredBuffer<MeshTreeNode> mesh_tree : register(t0);
-StructuredBuffer<int> indices : register(t1);
-StructuredBuffer<Vertex> vertices : register(t2);
-StructuredBuffer<float4x4> model_matrices : register(t3);
+
 
 uint get_heap_parent_index(uint index)
 {

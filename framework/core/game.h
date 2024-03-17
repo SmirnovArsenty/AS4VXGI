@@ -46,5 +46,6 @@ public:
 
     const Win& win() const;
     const Render& render() const;
+    Render& render();
     // Scene& scene() const;
 };

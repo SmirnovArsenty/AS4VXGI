@@ -4,7 +4,6 @@
 #include <SimpleMath.h>
 using namespace DirectX::SimpleMath;
 
-#include "render/resource/buffer.h"
 #include "shaders/common/types.fx"
 
 class Camera

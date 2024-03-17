@@ -4,6 +4,7 @@
 #include <assimp/Importer.hpp>
 
 #include "core/game.h"
+#include "render/common.h"
 #include "render/render.h"
 #include "render/camera.h"
 #include "model_tree.h"
@@ -76,91 +77,135 @@ void ModelTree::Mesh::initialize(//Material& material,
         }
     }
 
-    // index_buffer_.initialize(indices.data(), indices.size());
-    // vertex_buffer_.initialize(vertices.data(), vertices.size(), sizeof(Vertex));
-    // 
-    // index_buffer_resource_view_.initialize(indices.data(), indices.size());
-    // vertex_buffer_resource_view_.initialize(vertices.data(), vertices.size());
+    auto& device = Game::inst()->render().device();
+
+    index_buffer_.initialize(indices_);
+    { // index buffer srv
+        index_buffer_srv_resource_index_ = Game::inst()->render().allocate_resource_descriptor(index_buffer_srv_);
+        D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
+        desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        desc.Format = DXGI_FORMAT_R32_UINT;
+        desc.Buffer.FirstElement = 0;
+        desc.Buffer.NumElements = UINT(indices_.size());
+        desc.Buffer.StructureByteStride = sizeof(UINT32);
+        device->CreateShaderResourceView(index_buffer_.resource(), &desc, index_buffer_srv_);
+    }
+    vertex_buffer_.initialize(vertices_);
+    { // vertex buffer srv
+        vertex_buffer_srv_resource_index_ = Game::inst()->render().allocate_resource_descriptor(vertex_buffer_srv_);
+        D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
+        desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        desc.Format = DXGI_FORMAT_UNKNOWN;
+        desc.Buffer.FirstElement = 0;
+        desc.Buffer.NumElements = UINT(vertices_.size());
+        desc.Buffer.StructureByteStride = sizeof(Vertex);
+        device->CreateShaderResourceView(vertex_buffer_.resource(), &desc, vertex_buffer_srv_);
+    }
 
 #ifndef NDEBUG
-    // box_shader_.set_vs_shader_from_file("./resources/shaders/debug/box.hlsl", "VSMain");
-    // box_shader_.set_ps_shader_from_file("./resources/shaders/debug/box.hlsl", "PSMain");
-    // D3D11_INPUT_ELEMENT_DESC inputs[] =
-    // {
-    //     { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-    // };
-    // box_shader_.set_input_layout(inputs, std::size(inputs));
-    // 
-    // std::vector<uint32_t> box_indices;
-    // std::vector<Vector4> box_vertices;
-    // 
-    // // box with size of 1
-    // box_vertices.push_back({ .5, .5, .5, 1 }); // 0
-    // box_vertices.push_back({ .5, .5, -.5, 1 }); // 1
-    // box_vertices.push_back({ .5, -.5, .5, 1 }); // 2
-    // box_vertices.push_back({ -.5, .5, .5, 1 }); // 3
-    // box_vertices.push_back({ .5, -.5, -.5, 1 }); // 4
-    // box_vertices.push_back({ -.5, .5, -.5, 1 }); // 5
-    // box_vertices.push_back({ -.5, -.5, .5, 1 }); // 6
-    // box_vertices.push_back({ -.5, -.5, -.5, 1 }); // 7
-    // 
-    // box_indices.push_back(0);
-    // box_indices.push_back(1);
-    // box_indices.push_back(0);
-    // box_indices.push_back(2);
-    // box_indices.push_back(0);
-    // box_indices.push_back(3);
-    // 
-    // box_indices.push_back(1);
-    // box_indices.push_back(4);
-    // box_indices.push_back(1);
-    // box_indices.push_back(5);
-    // 
-    // box_indices.push_back(2);
-    // box_indices.push_back(4);
-    // box_indices.push_back(2);
-    // box_indices.push_back(6);
-    // 
-    // box_indices.push_back(3);
-    // box_indices.push_back(5);
-    // box_indices.push_back(3);
-    // box_indices.push_back(6);
-    // 
-    // box_indices.push_back(4);
-    // box_indices.push_back(7);
-    // 
-    // box_indices.push_back(5);
-    // box_indices.push_back(7);
-    // 
-    // box_indices.push_back(6);
-    // box_indices.push_back(7);
-    // 
-    // assert(box_indices.size() == 24); // 12 edges
-    // 
-    // box_index_buffer_.initialize(box_indices.data(), box_indices.size());
-    // box_vertex_buffer_.initialize(box_vertices.data(), box_vertices.size(), sizeof(Vector4));
-    // 
-    // std::vector<Matrix> box_transformations;
-    // for (int32_t i = 0; i < mesh_tree_.size(); ++i) {
-    //     Vector3 position;
-    //     Vector3 scale;
-    // 
-    //     position.x = (mesh_tree_[i].max.x + mesh_tree_[i].min.x) / 2;
-    //     position.y = (mesh_tree_[i].max.y + mesh_tree_[i].min.y) / 2;
-    //     position.z = (mesh_tree_[i].max.z + mesh_tree_[i].min.z) / 2;
-    //     scale.x = (mesh_tree_[i].max.x - mesh_tree_[i].min.x);
-    //     scale.y = (mesh_tree_[i].max.y - mesh_tree_[i].min.y);
-    //     scale.z = (mesh_tree_[i].max.z - mesh_tree_[i].min.z);
-    // 
-    //     // scale *= 1.1f;
-    // 
-    //     box_transformations.push_back(Matrix::CreateScale(scale.x, scale.y, scale.z) * Matrix::CreateTranslation(position.x, position.y, position.z));
-    // }
-    // box_transformations_.initialize(box_transformations.data(), (int32_t)std::size(box_transformations));
-    // 
-    // box_shader_.attach_index_buffer(&box_index_buffer_);
-    // box_shader_.attach_vertex_buffer(&box_vertex_buffer_);
-    // box_shader_.attach_resource(0, &box_transformations_);
+    box_visualize_pipeline_.attach_vertex_shader(L"./resources/shaders/debug/box.hlsl", {});
+    box_visualize_pipeline_.attach_pixel_shader(L"./resources/shaders/debug/box.hlsl", {});
+    D3D12_INPUT_ELEMENT_DESC inputs[] =
+    {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    };
+    box_visualize_pipeline_.setup_input_layout(inputs, _countof(inputs));
+    box_visualize_pipeline_.declare_bind<MeshTreeNode_BIND>();
+    box_visualize_pipeline_.declare_bind<int_BIND>();
+    box_visualize_pipeline_.declare_bind<Vertex_BIND>();
+    box_visualize_pipeline_.declare_bind<MATRIX_BIND>();
+    box_visualize_pipeline_.create_command_list();
+    
+    std::vector<uint32_t> box_indices;
+    std::vector<Vector4> box_vertices;
+
+    // box with size of 1
+    box_vertices.push_back({ .5, .5, .5, 1 }); // 0
+    box_vertices.push_back({ .5, .5, -.5, 1 }); // 1
+    box_vertices.push_back({ .5, -.5, .5, 1 }); // 2
+    box_vertices.push_back({ -.5, .5, .5, 1 }); // 3
+    box_vertices.push_back({ .5, -.5, -.5, 1 }); // 4
+    box_vertices.push_back({ -.5, .5, -.5, 1 }); // 5
+    box_vertices.push_back({ -.5, -.5, .5, 1 }); // 6
+    box_vertices.push_back({ -.5, -.5, -.5, 1 }); // 7
+
+    box_indices.push_back(0);
+    box_indices.push_back(1);
+    box_indices.push_back(0);
+    box_indices.push_back(2);
+    box_indices.push_back(0);
+    box_indices.push_back(3);
+
+    box_indices.push_back(1);
+    box_indices.push_back(4);
+    box_indices.push_back(1);
+    box_indices.push_back(5);
+
+    box_indices.push_back(2);
+    box_indices.push_back(4);
+    box_indices.push_back(2);
+    box_indices.push_back(6);
+
+    box_indices.push_back(3);
+    box_indices.push_back(5);
+    box_indices.push_back(3);
+    box_indices.push_back(6);
+
+    box_indices.push_back(4);
+    box_indices.push_back(7);
+
+    box_indices.push_back(5);
+    box_indices.push_back(7);
+
+    box_indices.push_back(6);
+    box_indices.push_back(7);
+
+    assert(box_indices.size() == 24); // 12 edges
+
+    box_index_buffer_.initialize(box_indices);
+    box_vertex_buffer_.initialize(box_vertices);
+
+    std::vector<Matrix> box_transformations;
+    for (int32_t i = 0; i < mesh_tree_.size(); ++i) {
+        Vector3 position;
+        Vector3 scale;
+
+        position.x = (mesh_tree_[i].max.x + mesh_tree_[i].min.x) / 2;
+        position.y = (mesh_tree_[i].max.y + mesh_tree_[i].min.y) / 2;
+        position.z = (mesh_tree_[i].max.z + mesh_tree_[i].min.z) / 2;
+        scale.x = (mesh_tree_[i].max.x - mesh_tree_[i].min.x);
+        scale.y = (mesh_tree_[i].max.y - mesh_tree_[i].min.y);
+        scale.z = (mesh_tree_[i].max.z - mesh_tree_[i].min.z);
+
+        // scale *= 1.1f;
+
+        box_transformations.push_back(Matrix::CreateScale(scale.x, scale.y, scale.z) * Matrix::CreateTranslation(position.x, position.y, position.z));
+    }
+
+    {
+        HRESULT_CHECK(device->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+            D3D12_HEAP_FLAG_NONE,
+            &CD3DX12_RESOURCE_DESC::Buffer(box_transformations.size() * sizeof(Matrix)),
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(box_transformations_.ReleaseAndGetAddressOf())));
+
+        CD3DX12_RANGE range(0, 0);
+        HRESULT_CHECK(box_transformations_->Map(0, &range, &box_transformations_mapped_ptr_));
+        memcpy(box_transformations_mapped_ptr_, box_transformations.data(), box_transformations.size() * sizeof(Matrix));
+
+        box_transformation_resource_index_ = Game::inst()->render().allocate_resource_descriptor(box_transformations_srv_);
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
+        desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        desc.Format = DXGI_FORMAT_UNKNOWN;
+        desc.Buffer.FirstElement = 0;
+        desc.Buffer.NumElements = UINT(box_transformations.size());
+        desc.Buffer.StructureByteStride = sizeof(Matrix);
+        desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+        device->CreateShaderResourceView(box_transformations_.Get(), &desc, box_transformations_srv_);
+    }
 #endif
 }
 
@@ -183,6 +228,7 @@ void ModelTree::Mesh::destroy()
 
 void ModelTree::Mesh::draw()
 {
+
 //     index_buffer_.bind();
 //     vertex_buffer_.bind(0U);
 //     material_.use();
@@ -221,41 +267,30 @@ void ModelTree::load(const std::string& file, Vector3 position, Quaternion rotat
     meshes_.reserve(scene->mNumMeshes);
     load_node(scene->mRootNode, scene);
 
-    // D3D11_INPUT_ELEMENT_DESC inputs[] =
-    // {
-    //     { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-    //     { "TEXCOORD_U", 0, DXGI_FORMAT_R32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-    //     { "TEXCOORD_V", 0, DXGI_FORMAT_R32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-    //     { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-    // };
-    // albedo_shader_.set_vs_shader_from_file("./resources/shaders/debug/albedo.hlsl", "VSMain");
-    // albedo_shader_.set_ps_shader_from_file("./resources/shaders/debug/albedo.hlsl", "PSMain");
-    // albedo_shader_.set_input_layout(inputs, std::size(inputs));
-    // 
-    // normal_shader_.set_vs_shader_from_file("./resources/shaders/debug/normal.hlsl", "VSMain");
-    // normal_shader_.set_ps_shader_from_file("./resources/shaders/debug/normal.hlsl", "PSMain");
-    // normal_shader_.set_input_layout(inputs, std::size(inputs));
-    // 
-    // auto device = Game::inst()->render().device();
-    // CD3D11_RASTERIZER_DESC opaque_rast_desc = {};
-    // opaque_rast_desc.CullMode = D3D11_CULL_BACK; // do not draw back-facing triangles
-    // opaque_rast_desc.FillMode = D3D11_FILL_SOLID;
-    // opaque_rast_desc.FrontCounterClockwise = true;
-    // D3D11_CHECK(device->CreateRasterizerState(&opaque_rast_desc, &rasterizer_state_));
+    D3D12_INPUT_ELEMENT_DESC inputs[] =
+    {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    };
+    graphics_pipeline_.setup_input_layout(inputs, _countof(inputs));
+    if (0) {
+        graphics_pipeline_.attach_vertex_shader(L"./resources/shaders/debug/albedo.hlsl", {});
+        graphics_pipeline_.attach_pixel_shader(L"./resources/shaders/debug/albedo.hlsl", {});
+    } else {
+        graphics_pipeline_.attach_vertex_shader(L"./resources/shaders/debug/normal.hlsl", {});
+        graphics_pipeline_.attach_pixel_shader(L"./resources/shaders/debug/normal.hlsl", {});
+    }
+
+    auto& device = Game::inst()->render().device();
 
     // initialize GPU buffers
-    dynamic_model_data_.transform = Matrix::CreateTranslation(position) * Matrix::CreateFromQuaternion(rotation) * Matrix::CreateScale(scale);
-    dynamic_model_data_.inverse_transpose_transform = dynamic_model_data_.transform.Invert().Transpose();
-    // if constexpr (sizeof(dynamic_model_data_) != 0) {
-    //     dynamic_model_buffer_.initialize(&dynamic_model_data_);
-    // }
-    // 
-    // albedo_shader_.attach_buffer(1U, &dynamic_model_buffer_);
-    // normal_shader_.attach_buffer(1U, &dynamic_model_buffer_);
-
-    // if constexpr (sizeof(const_model_data_) != 0) {
-    //     const_model_buffer_.initialize(&const_model_data_);
-    // }
+    model_data_.transform = Matrix::CreateTranslation(position) * Matrix::CreateFromQuaternion(rotation) * Matrix::CreateScale(scale);
+    model_data_.inverse_transpose_transform = model_data_.transform.Invert().Transpose();
+    {
+        model_cb_.initialize();
+        model_cb_.update(model_data_);
+    }
 }
 
 void ModelTree::unload()

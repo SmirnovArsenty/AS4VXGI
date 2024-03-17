@@ -58,6 +58,7 @@ private:
     // create_descriptor_heap
     ComPtr<ID3D12DescriptorHeap> resource_descriptor_heap_;
     UINT resource_descriptor_size_;
+    UINT resources_allocated_;
     ComPtr<ID3D12DescriptorHeap> sampler_descriptor_heap_;
     UINT sampler_descriptor_size_;
 
@@ -125,4 +126,6 @@ public:
 
     const ComPtr<ID3D12DescriptorHeap>& resource_descriptor_heap() const;
     const ComPtr<ID3D12DescriptorHeap>& sampler_descriptor_heap() const;
+
+    UINT allocate_resource_descriptor(D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handle);
 };

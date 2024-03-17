@@ -22,9 +22,12 @@ public:
 private:
     std::vector<ModelTree*> model_trees_;
 
-    COMMON cb_common_;
+    ConstBuffer<COMMON_BIND> common_cb_;
+    COMMON_BIND common_;
 
-    ComPtr<ID3D12DescriptorHeap> resources_heap_;
+    ComPtr<ID3D12Resource> uav_voxels_resource_;
+    UINT uav_voxels_resource_index_;
+    D3D12_CPU_DESCRIPTOR_HANDLE uav_voxels_;
 
     // voxels storage
     // UnorderedAccessBuffer<Voxel> voxels_;

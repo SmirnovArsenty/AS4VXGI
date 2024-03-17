@@ -184,6 +184,7 @@ void Render::create_descriptor_heap()
     resource_heap_desc.NodeMask = 0;
     HRESULT_CHECK(device_->CreateDescriptorHeap(&resource_heap_desc, IID_PPV_ARGS(resource_descriptor_heap_.ReleaseAndGetAddressOf())));
     resource_descriptor_size_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    resources_allocated_ = 0;
 
     D3D12_DESCRIPTOR_HEAP_DESC sampler_heap_desc = {};
     sampler_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
@@ -484,4 +485,10 @@ const ComPtr<ID3D12DescriptorHeap>& Render::sampler_descriptor_heap() const
     return sampler_descriptor_heap_;
 }
 
-
+UINT Render::allocate_resource_descriptor(D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handle)
+{
+    CD3DX12_CPU_DESCRIPTOR_HANDLE handle(resource_descriptor_heap_->GetCPUDescriptorHandleForHeapStart());
+    handle.Offset(resources_allocated_, resource_descriptor_size_);
+    cpu_handle = handle;
+    return resources_allocated_++;
+}

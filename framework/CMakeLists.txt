@@ -20,8 +20,7 @@ set(group_render
 )
 
 set(group_render_resource
-    render/resource/buffer.cpp
-    render/resource/buffer.h
+    render/resource/buffer.hpp
     render/resource/pipeline.cpp
     render/resource/pipeline.h
     render/resource/texture.cpp

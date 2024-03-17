@@ -55,4 +55,9 @@ DECLARE_CBV(COMMON, 0, 0)
 
 DECLARE_UAV(VOXELS, Voxel, 0, 0)
 
+DECLARE_SRV(MeshTreeNode, mesh_tree, 0, 0)
+DECLARE_SRV(int, indices, 1, 0)
+DECLARE_SRV(Vertex, vertices, 2, 0)
+DECLARE_SRV(MATRIX, model_matrices, 3, 0)
+
 #endif // __TYPES_FX__

@@ -5,12 +5,11 @@
 
 #include <SimpleMath.h>
 using namespace DirectX::SimpleMath;
-#include <d3d11.h>
 
 #include "component/game_component.h"
 
 #include "render/resource/texture.h"
-#include "render/resource/buffer.h"
+#include "render/resource/buffer.hpp"
 
 class Light : public GameComponent
 {
@@ -93,13 +92,13 @@ private:
     Vector3 color_;
     Vector3 direction_;
 
-    ID3D11Texture2D* ds_buffer_{ nullptr };
-    ID3D11ShaderResourceView* ds_buffer_view_{ nullptr };
-    ID3D11DepthStencilView* ds_view_{ nullptr };
+    // ID3D11Texture2D* ds_buffer_{ nullptr };
+    // ID3D11ShaderResourceView* ds_buffer_view_{ nullptr };
+    // ID3D11DepthStencilView* ds_view_{ nullptr };
 
     // deferred
-    ID3D11DepthStencilState* ds_state_{ nullptr };
-    ID3D11BlendState* blend_state_{ nullptr };
+    // ID3D11DepthStencilState* ds_state_{ nullptr };
+    // ID3D11BlendState* blend_state_{ nullptr };
 
     //GraphicsShader shader_;
 };
@@ -133,7 +132,7 @@ private:
     //VertexBuffer vertex_buffer_;
     //IndexBuffer index_buffer_;
 
-    ID3D11RasterizerState* rasterizer_state_{ nullptr };
+    // ID3D11RasterizerState* rasterizer_state_{ nullptr };
 
     //GraphicsShader shader_;
 };

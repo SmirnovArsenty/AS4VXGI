@@ -2,6 +2,7 @@
 #include "game.h"
 #include "win32/win.h"
 #include "win32/input.h"
+#include "render/common.h"
 #include "render/render.h"
 // #include "render/scene/scene.h"
 #include "render/camera.h"
@@ -177,6 +178,11 @@ const Win& Game::win() const
 }
 
 const Render& Game::render() const
+{
+    return *render_;
+}
+
+Render& Game::render()
 {
     return *render_;
 }

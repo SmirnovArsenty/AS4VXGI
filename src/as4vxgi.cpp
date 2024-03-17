@@ -37,6 +37,7 @@ void AS4VXGI_Component::initialize()
     //model.load("./resources/models/sponza/source/sponza.fbx");
 
     auto& device = Game::inst()->render().device();
+    auto& descriptor_heap = Game::inst()->render().resource_descriptor_heap();
 
     {
         // create command lists
@@ -46,8 +47,8 @@ void AS4VXGI_Component::initialize()
             stage_1_pipeline_ = new ComputePipeline();
             stage_1_pipeline_->attach_compute_shader(L"./resources/shaders/voxels/clear.hlsl", {});
 
-            stage_1_pipeline_->declare_bind<COMMON>();
-            stage_1_pipeline_->declare_bind<VOXELS>();
+            stage_1_pipeline_->declare_bind<COMMON_BIND>();
+            stage_1_pipeline_->declare_bind<VOXELS_BIND>();
 
             stage_1_pipeline_->create_command_list();
         }
@@ -56,8 +57,8 @@ void AS4VXGI_Component::initialize()
             stage_2_pipeline_ = new ComputePipeline();
             stage_2_pipeline_->attach_compute_shader(L"./resources/shaders/voxels/fill.hlsl", {});
 
-            stage_2_pipeline_->declare_bind<COMMON>();
-            stage_2_pipeline_->declare_bind<VOXELS>();
+            stage_2_pipeline_->declare_bind<COMMON_BIND>();
+            stage_2_pipeline_->declare_bind<VOXELS_BIND>();
 
             stage_2_pipeline_->create_command_list();
         }
@@ -75,20 +76,38 @@ void AS4VXGI_Component::initialize()
             stage_visualize_pipeline_->attach_geometry_shader(L"./resources/shaders/voxels/draw.hlsl", {});
             stage_visualize_pipeline_->attach_pixel_shader(L"./resources/shaders/voxels/draw.hlsl", {});
 
-            stage_visualize_pipeline_->declare_bind<COMMON>();
-            stage_visualize_pipeline_->declare_bind<VOXELS>();
+            stage_visualize_pipeline_->declare_bind<COMMON_BIND>();
+            stage_visualize_pipeline_->declare_bind<VOXELS_BIND>();
 
             stage_visualize_pipeline_->create_command_list();
         }
     }
 
+    // create const buffer view
+    {
+        common_cb_.initialize();
+        common_cb_.update(common_);
+    }
 
-    D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};
-    heap_desc.NumDescriptors = 4;
-    heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    // create voxels uav
+    {
+        UINT voxels_uav_size = voxel_grid_dim * voxel_grid_dim * voxel_grid_dim * sizeof(Voxel);
+        HRESULT_CHECK(device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+            D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(voxels_uav_size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
+            D3D12_RESOURCE_STATE_COMMON, nullptr,
+            IID_PPV_ARGS(uav_voxels_resource_.ReleaseAndGetAddressOf())));
 
-    device->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(resources_heap_.GetAddressOf()));
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
+        uav_desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+        uav_desc.Format = DXGI_FORMAT_UNKNOWN;
+        uav_desc.Buffer.CounterOffsetInBytes = 0;
+        uav_desc.Buffer.NumElements = voxel_grid_dim * voxel_grid_dim * voxel_grid_dim;
+        uav_desc.Buffer.StructureByteStride = sizeof(Voxel);
+        uav_desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+
+        uav_voxels_resource_index_ = Game::inst()->render().allocate_resource_descriptor(uav_voxels_);
+        device->CreateUnorderedAccessView(uav_voxels_resource_.Get(), nullptr, &uav_desc, uav_voxels_);
+    }
 
     // voxels storage
     // voxels_.initialize(nullptr, voxel_grid_dim * voxel_grid_dim * voxel_grid_dim);

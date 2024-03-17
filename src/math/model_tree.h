@@ -7,8 +7,10 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
-#include "render/resource/buffer.h"
+#include "render/common.h"
+#include "render/resource/buffer.hpp"
 #include "render/resource/texture.h"
+#include "render/resource/pipeline.h"
 
 #include "SimpleMath.h"
 using namespace DirectX::SimpleMath;
@@ -34,11 +36,11 @@ public:
 
     void draw(Camera* camera);
 
-    //std::vector<ID3D11ShaderResourceView*> get_index_buffers_srv();
-    //std::vector<ID3D11ShaderResourceView*> get_vertex_buffers_srv();
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> get_index_buffers_srv();
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> get_vertex_buffers_srv();
     std::vector<std::vector<uint32_t>> get_meshes_indices();
     std::vector<std::vector<Vertex>> get_meshes_vertices();
-    Matrix get_transform() const { return dynamic_model_data_.transform; }
+    Matrix get_transform() const { return model_data_.transform; }
 
     std::vector<std::vector<MeshTreeNode>> get_meshes_trees();
 private:
@@ -60,8 +62,8 @@ private:
         void debug_draw();
 #endif
 
-        // ID3D11ShaderResourceView* get_index_buffer_srv() { return index_buffer_resource_view_.getSRV(); }
-        // ID3D11ShaderResourceView* get_vertex_buffer_srv() { return vertex_buffer_resource_view_.getSRV(); }
+        D3D12_CPU_DESCRIPTOR_HANDLE get_index_buffer_srv() { return index_buffer_srv_; }
+        D3D12_CPU_DESCRIPTOR_HANDLE get_vertex_buffer_srv() { return vertex_buffer_srv_; }
 
         const std::vector<uint32_t>& get_indices() const;
         const std::vector<Vertex>& get_vertices() const;
@@ -78,20 +80,28 @@ private:
         std::vector<Vertex> vertices_;
 
         UINT index_count_{ 0 };
-        // IndexBuffer index_buffer_;
-        // VertexBuffer vertex_buffer_;
-        // ShaderResource<uint32_t> index_buffer_resource_view_;
-        // ShaderResource<Vertex> vertex_buffer_resource_view_;
+
+        IndexBuffer index_buffer_;
+        VertexBuffer<Vertex> vertex_buffer_;
+
+        D3D12_CPU_DESCRIPTOR_HANDLE index_buffer_srv_;
+        UINT index_buffer_srv_resource_index_;
+        D3D12_CPU_DESCRIPTOR_HANDLE vertex_buffer_srv_;
+        UINT vertex_buffer_srv_resource_index_;
 
         std::unordered_map<int32_t, MeshTreeNode> mesh_tree_;
 
         void split_vertices(float min[3], float max[3], int32_t start, int32_t count, int32_t current_mesh_node_index);
 
 #ifndef NDEBUG
-        // ShaderResource<Matrix> box_transformations_;
-        // GraphicsShader box_shader_;
-        // IndexBuffer box_index_buffer_;
-        // VertexBuffer box_vertex_buffer_;
+        GraphicsPipeline box_visualize_pipeline_;
+        ComPtr<ID3D12Resource> box_transformations_;
+        void* box_transformations_mapped_ptr_ = nullptr;
+        UINT box_transformation_resource_index_;
+        D3D12_CPU_DESCRIPTOR_HANDLE box_transformations_srv_;
+
+        IndexBuffer box_index_buffer_;
+        VertexBuffer<Vector4> box_vertex_buffer_;
 #endif
     };
 
@@ -108,7 +118,8 @@ private:
     struct {
         Matrix transform;
         Matrix inverse_transpose_transform;
-    } dynamic_model_data_;
+    } model_data_;
+    ConstBuffer<decltype(model_data_)> model_cb_;
     // DynamicBuffer<decltype(dynamic_model_data_)> dynamic_model_buffer_;
 
     // renderstate
@@ -117,4 +128,6 @@ private:
     // debug shaders
     // GraphicsShader albedo_shader_;
     // GraphicsShader normal_shader_;
+
+    GraphicsPipeline graphics_pipeline_;
 };
