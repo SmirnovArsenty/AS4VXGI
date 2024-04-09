@@ -23,6 +23,7 @@ struct BindInfo
     UINT slot() {return sl;};
     UINT space() {return sp;};
 };
+
 #define DECLARE_CBV(NAME, SLOT, SPACE) struct NAME##_BIND : public BindInfo<CBV, SLOT, SPACE>
 #define DECLARE_SRV(NAME, TYPE, SLOT, SPACE) struct NAME##_BIND : public BindInfo<SRV, SLOT, SPACE> {};
 #define DECLARE_UAV(NAME, TYPE, SLOT, SPACE) struct NAME##_BIND : public BindInfo<UAV, SLOT, SPACE> {};
@@ -36,6 +37,7 @@ struct BindInfo
 #define UINT uint
 
 #define DECLARE_CBV(NAME, SLOT, SPACE) cbuffer NAME : register(b##SLOT, space##SPACE)
+
 #define DECLARE_SRV(NAME, TYPE, SLOT, SPACE) StructuredBuffer<TYPE> NAME : register(t##SLOT, space##SPACE);
 #define DECLARE_UAV(NAME, TYPE, SLOT, SPACE) RWStructuredBuffer<TYPE> NAME : register(u##SLOT, space##SPACE);
 

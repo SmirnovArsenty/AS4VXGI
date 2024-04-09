@@ -1,5 +1,5 @@
 #define CAMERA_REGISTER b0
-#include "framework/shaders/common/types.fx"
+#include "../../../framework/shaders/common/types.fx"
 
 struct VS_IN
 {
@@ -19,19 +19,11 @@ struct PS_OUT
     float4 color : SV_Target0;
 };
 
-cbuffer ModelData : register(b1)
-{
-    float4x4 transform;
-    float4x4 inverse_transpose_transform;
-};
-
-StructuredBuffer<float4x4> box_transform : register(t0);
-
 PS_VS VSMain(VS_IN input)
 {
     PS_VS res = (PS_VS)0;
 
-    res.pos = mul(camera.vp, mul(transform, mul(box_transform[input.index], input.position)));
+    res.pos = mul(cameraData.vp, mul(transform, mul(BOX_TRANSFORM[input.index], input.position)));
     res.color = float4(((255.f - input.index) / 255.f).xxx, 1.f);
 
     return res;

@@ -102,9 +102,19 @@ void Pipeline::declare_range(D3D12_DESCRIPTOR_RANGE_TYPE range_type, UINT slot, 
     descriptor_ranges_.back().Init(range_type, 1, slot, space, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
 }
 
-ID3D12GraphicsCommandList* Pipeline::add_cmd()
+ID3D12GraphicsCommandList* Pipeline::add_cmd() const
 {
     return command_list_.Get();
+}
+
+ID3D12RootSignature* Pipeline::get_root_signature() const
+{
+    return root_signature_.Get();
+}
+
+ID3D12PipelineState* Pipeline::get_pso() const
+{
+    return pso_.Get();
 }
 
 #pragma endregion
@@ -113,6 +123,7 @@ ID3D12GraphicsCommandList* Pipeline::add_cmd()
 
 GraphicsPipeline::GraphicsPipeline()
 {
+    pso_desc_ = {};
     pso_desc_.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
     pso_desc_.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
     pso_desc_.DepthStencilState.DepthEnable = FALSE;
@@ -121,7 +132,7 @@ GraphicsPipeline::GraphicsPipeline()
     pso_desc_.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pso_desc_.NumRenderTargets = 1;
     pso_desc_.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-    /// TODO: pso_desc_.DSVFormat = ;
+    pso_desc_.DSVFormat = DXGI_FORMAT_D32_FLOAT;
     pso_desc_.SampleDesc.Count = 1;
 }
 
@@ -137,6 +148,16 @@ GraphicsPipeline::~GraphicsPipeline()
     vertex_buffer_.Reset();
 
     root_signature_.Reset();
+}
+
+void GraphicsPipeline::setup_depth_stencil_state(D3D12_DEPTH_STENCIL_DESC state)
+{
+    pso_desc_.DepthStencilState = state;
+}
+
+void GraphicsPipeline::setup_primitive_topology_type(D3D12_PRIMITIVE_TOPOLOGY_TYPE type)
+{
+    pso_desc_.PrimitiveTopologyType = type;
 }
 
 void GraphicsPipeline::setup_input_layout(const D3D12_INPUT_ELEMENT_DESC* inputElementDescs, uint32_t size)
@@ -212,6 +233,7 @@ void ComputePipeline::create_command_list()
     assert(command_list_.Get() == nullptr);
 
     auto& device = Game::inst()->render().device();
+    auto& compute_queue = Game::inst()->render().compute_queue();
     auto& allocator = Game::inst()->render().compute_command_allocator();
 
     create_root_signature();

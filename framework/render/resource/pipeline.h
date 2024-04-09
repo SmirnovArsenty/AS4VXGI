@@ -38,7 +38,9 @@ public:
 
     virtual void create_command_list() = 0;
 
-    ID3D12GraphicsCommandList* add_cmd();
+    ID3D12GraphicsCommandList* add_cmd() const;
+    ID3D12RootSignature* get_root_signature() const;
+    ID3D12PipelineState* get_pso() const;
 };
 
 class GraphicsPipeline : public Pipeline
@@ -55,6 +57,9 @@ private:
 public:
     GraphicsPipeline();
     ~GraphicsPipeline();
+
+    void setup_depth_stencil_state(D3D12_DEPTH_STENCIL_DESC state);
+    void setup_primitive_topology_type(D3D12_PRIMITIVE_TOPOLOGY_TYPE type);
 
     void setup_input_layout(const D3D12_INPUT_ELEMENT_DESC* inputElementDescs, uint32_t size);
     void attach_vertex_shader(const std::wstring& path, const std::vector<std::wstring>& defines);

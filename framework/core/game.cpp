@@ -89,6 +89,10 @@ void Game::run()
                 }
             }
 
+            {
+                render_->end_frame();
+            }
+
             // Handle components imgui
             {
                 render_->prepare_imgui();

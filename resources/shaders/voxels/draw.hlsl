@@ -1,6 +1,6 @@
 #define CAMERA_REGISTER b0
-#define VOXEL_GRID_REGISTER b1
-#include "resources/shaders/voxels/voxel.fx"
+#define voxelGrid_REGISTER b1
+#include "voxel.fx"
 
 struct VS_IN
 {
@@ -18,19 +18,17 @@ struct PS_OUT
     float4 color : SV_Target0;
 };
 
-StructuredBuffer<Voxel> voxels : register(t0);
-
 PS_VS VSMain(VS_IN input)
 {
     PS_VS res = (PS_VS)0;
 
 #if 0
     float3 up = float3(0, 1, 0);
-    float3 right = cross(camera.forward, up);
+    float3 right = cross(cameraData.forward, up);
     right = normalize(right);
-    up = cross(camera.forward, right);
+    up = cross(cameraData.forward, right);
     up = normalize(up);
-    float3 forward = camera.forward;
+    float3 forward = cameraData.forward;
 #else
     float3 forward = float3(0, 0, -1);
     float3 up = float3(0, 1, 0);
@@ -38,21 +36,21 @@ PS_VS VSMain(VS_IN input)
 #endif
 
 
-    int z_index = input.index / (voxel_grid.dimension * voxel_grid.dimension);
-    int y_index = (input.index - z_index * voxel_grid.dimension * voxel_grid.dimension) / voxel_grid.dimension;
-    int x_index = input.index - y_index * voxel_grid.dimension - z_index * voxel_grid.dimension * voxel_grid.dimension;
+    int z_index = input.index / (voxelGrid.dimension * voxelGrid.dimension);
+    int y_index = (input.index - z_index * voxelGrid.dimension * voxelGrid.dimension) / voxelGrid.dimension;
+    int x_index = input.index - y_index * voxelGrid.dimension - z_index * voxelGrid.dimension * voxelGrid.dimension;
 
-    float unit = voxel_grid.size / voxel_grid.dimension;
+    float unit = voxelGrid.size / voxelGrid.dimension;
 
     float3 pos = (float3)0;
-    pos += right *   (-voxel_grid.size / 2 + unit * x_index - unit * 0.5);
-    pos -= up *      (-voxel_grid.size / 2 + unit * y_index);
-    pos += forward * (-voxel_grid.size / 2 + unit * z_index);
+    pos += right *   (-voxelGrid.size / 2 + unit * x_index - unit * 0.5);
+    pos -= up *      (-voxelGrid.size / 2 + unit * y_index);
+    pos += forward * (-voxelGrid.size / 2 + unit * z_index);
 
     res.pos = float4(pos, 1.f);
-    //res.pos = mul(camera.vp, float4(pos, 1.f));
-    //float3 color = abs(normalize(pos - camera.position));
-    float3 color = abs(voxels[input.index].normal);
+    //res.pos = mul(cameraData.vp, float4(pos, 1.f));
+    //float3 color = abs(normalize(pos - cameraData.position));
+    float3 color = abs(VOXELS[input.index].normal);
     res.color = float4(color, 1.f);
 
     return res;
@@ -69,7 +67,7 @@ void GSMain(point PS_VS input[1], inout LineStream<PS_VS> OutputStream)
 void GSMain(point PS_VS input[1], inout TriangleStream<PS_VS> OutputStream)
 #endif
 {
-    const float size = (voxel_grid.size / voxel_grid.dimension);
+    const float size = (voxelGrid.size / voxelGrid.dimension);
 
     PS_VS data = input[0];
 
@@ -80,8 +78,8 @@ void GSMain(point PS_VS input[1], inout TriangleStream<PS_VS> OutputStream)
     bool draw_line = false;
     bool draw_cube = true;
 
-    float4x4 transform = camera.projection;
-    // transform = camera.vp; // debug
+    float4x4 transform = cameraData.projection;
+    // transform = cameraData.vp; // debug
 
 #if DRAW_LINES
     // lines

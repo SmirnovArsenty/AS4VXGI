@@ -44,16 +44,24 @@ private:
     ComPtr<IDXGISwapChain3> swapchain_;
     UINT frame_index_;
 
-    // create_rtv_descriptor_heap
-    ComPtr<ID3D12DescriptorHeap> rtv_heap_;
     UINT rtv_descriptor_size_{ 0 };
+    // create_rtv_descriptor_heap
+    // swapchain buffers
+    ComPtr<ID3D12DescriptorHeap> rtv_heap_;
+    // deferred render targets
+    ComPtr<ID3D12DescriptorHeap> dsv_heap_;
+    ComPtr<ID3D12DescriptorHeap> gbuffer_heap_;
 
     // create_render_target_views
     ComPtr<ID3D12Resource> render_targets_[swapchain_buffer_count_];
 
+    // deferred pass render targets
+    ComPtr<ID3D12Resource> g_buffers_[8];
+    ComPtr<ID3D12Resource> depth_stencil_;
+
     // create_command_allocator
-    ComPtr<ID3D12CommandAllocator> graphics_command_allocator_;
-    ComPtr<ID3D12CommandAllocator> compute_command_allocator_;
+    ComPtr<ID3D12CommandAllocator> graphics_command_allocator_[swapchain_buffer_count_];
+    ComPtr<ID3D12CommandAllocator> compute_command_allocator_[swapchain_buffer_count_];
 
     // create_descriptor_heap
     ComPtr<ID3D12DescriptorHeap> resource_descriptor_heap_;
@@ -71,12 +79,16 @@ private:
     ComPtr<ID3D12Fence> compute_fence_;
     UINT64 compute_fence_value_{};
 
+    // defaults
+    CD3DX12_VIEWPORT viewport_;
+    CD3DX12_RECT scissor_rect_;
+
+    // internal command list
+    ComPtr<ID3D12GraphicsCommandList> cmd_list_[swapchain_buffer_count_];
+
     // imgui data
     ComPtr<ID3D12DescriptorHeap> imgui_srv_heap_;
-    ComPtr<ID3D12GraphicsCommandList> imgui_graphics_command_list_;
-
-    // constant buffers bind slots
-    D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_slots_[15];
+    ComPtr<ID3D12GraphicsCommandList> imgui_graphics_command_list_[swapchain_buffer_count_];
 
     void create_command_queue();
     void create_swapchain();
@@ -85,7 +97,9 @@ private:
     void create_command_allocator();
     void create_descriptor_heap();
     void create_fence();
+    void setup_viewport();
     void init_imgui();
+    void create_cmd_list();
 
     void destroy_command_queue();
     void destroy_swapchain();
@@ -95,6 +109,7 @@ private:
     void destroy_descriptor_heap();
     void destroy_fence();
     void term_imgui();
+    void destroy_cmd_list();
 
     Camera* camera_{ nullptr };
 public:
@@ -106,6 +121,7 @@ public:
     void fullscreen(bool);
 
     void prepare_frame();
+    void end_frame();
 
     void prepare_imgui();
     void end_imgui();
@@ -126,6 +142,9 @@ public:
 
     const ComPtr<ID3D12DescriptorHeap>& resource_descriptor_heap() const;
     const ComPtr<ID3D12DescriptorHeap>& sampler_descriptor_heap() const;
+
+    const D3D12_VIEWPORT& viewport() const;
+    const D3D12_RECT& scissor_rect() const;
 
     UINT allocate_resource_descriptor(D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handle);
 };

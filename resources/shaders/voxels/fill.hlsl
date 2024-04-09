@@ -1,9 +1,4 @@
-#define CAMERA_REGISTER b0
-#define VOXEL_GRID_REGISTER b1
 #include "voxel.fx"
-
-// t- slots
-
 
 uint get_heap_parent_index(uint index)
 {
@@ -26,8 +21,8 @@ bool inBoxBounds(MeshTreeNode mesh_node, float3 position)
 
 float boxIntersection(Ray ray, MeshTreeNode mesh_node)
 {
-    float3 _min = mul(model_matrices[0], float4(mesh_node.min, 1.f)).xyz;
-    float3 _max = mul(model_matrices[0], float4(mesh_node.max, 1.f)).xyz;
+    float3 _min = mul(MODEL_MATRICES[0], float4(mesh_node.min, 1.f)).xyz;
+    float3 _max = mul(MODEL_MATRICES[0], float4(mesh_node.max, 1.f)).xyz;
 
     float epsilon = 0.00001f;
     if (ray.direction.x == 0) {
@@ -116,7 +111,7 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
     Ray rays[3] = { GenerateRayForward(currentIndex), GenerateRayRight(currentIndex), GenerateRayUp(currentIndex) };
     bool found = false;
     for (uint ray_index = 0; ray_index < 3; ++ray_index) {
-        for (uint i = 0; i < voxel_grid.mesh_node_count; ++i) {
+        for (uint i = 0; i < voxelGrid.mesh_node_count; ++i) {
 #if OPTIMIZATION
             uint parent_index = (max(i, 1u) - 1u) / 2u;
             // for (parent_index = (max(i, 1u) - 1u) / 2u; parent_index / BITS_COUNT > ARRAY_SIZE; ++count_parents_not_found) {
@@ -124,7 +119,7 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
             // }
             bool need_check = true;
             if (parent_index / BITS_COUNT < ARRAY_SIZE) {
-                uint parent_hit_bit = (1 << parent_index - (parent_index / BITS_COUNT) * BITS_COUNT);
+                uint parent_hit_bit = (1U << (parent_index - (parent_index / BITS_COUNT) * BITS_COUNT));
                 need_check = (i == 0) || (hit_buffer[parent_index / BITS_COUNT][ray_index] & parent_hit_bit);
             }
 #else
@@ -140,8 +135,8 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
                 if (!need_check) {
                     continue;
                 }
-                float box_distance = boxIntersection(rays[ray_index], mesh_tree[i]);
-                if (box_distance <= 0) { // || box_distance > voxel_grid.size / voxel_grid.dimension) {
+                float box_distance = boxIntersection(rays[ray_index], MESH_TREE[i]);
+                if (box_distance <= 0) { // || box_distance > voxelGrid.size / voxelGrid.dimension) {
                     if (i == 0) {
                         break;
                     }
@@ -150,16 +145,16 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
                 box_t = box_distance;
             }
             {
-                for (int j = mesh_tree[i].start_index; j < mesh_tree[i].start_index + mesh_tree[i].count; j += 3) {
+                for (int j = MESH_TREE[i].start_index; j < MESH_TREE[i].start_index + MESH_TREE[i].count; j += 3) {
                     float3 _tri_normal = (0).xxx;
-                    float _tri_t = triangleIntersection(rays[ray_index], mul(model_matrices[0], float4(vertices[indices[j + 0]].position, 1.f)).xyz,
-                                                             mul(model_matrices[0], float4(vertices[indices[j + 1]].position, 1.f)).xyz,
-                                                             mul(model_matrices[0], float4(vertices[indices[j + 2]].position, 1.f)).xyz,
-                                                             vertices[indices[j + 0]].normal,
-                                                             vertices[indices[j + 1]].normal,
-                                                             vertices[indices[j + 2]].normal,
+                    float _tri_t = triangleIntersection(rays[ray_index], mul(MODEL_MATRICES[0], float4(VERTICES[INDICES[j + 0]].position, 1.f)).xyz,
+                                                             mul(MODEL_MATRICES[0], float4(VERTICES[INDICES[j + 1]].position, 1.f)).xyz,
+                                                             mul(MODEL_MATRICES[0], float4(VERTICES[INDICES[j + 2]].position, 1.f)).xyz,
+                                                             VERTICES[INDICES[j + 0]].normal,
+                                                             VERTICES[INDICES[j + 1]].normal,
+                                                             VERTICES[INDICES[j + 2]].normal,
                                                              _tri_normal);
-                    if (_tri_t > 0 && (_tri_t < t || t == 0) && (_tri_t < voxel_grid.size / voxel_grid.dimension)) {
+                    if (_tri_t > 0 && (_tri_t < t || t == 0) && (_tri_t < voxelGrid.size / voxelGrid.dimension)) {
                         t = _tri_t;
                         normal = _tri_normal;
                     }
@@ -168,7 +163,7 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
 #if OPTIMIZATION
             uint hit_index = i / BITS_COUNT;
             if (hit_index < ARRAY_SIZE) {
-                hit_buffer[hit_index][ray_index] |= (1 << (i - hit_index * BITS_COUNT));
+                hit_buffer[hit_index][ray_index] |= (1U << (i - hit_index * BITS_COUNT));
             }
 #endif
             if (tri_t > 0 && (tri_t < t || t == 0)) {
@@ -194,6 +189,6 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
         voxel.normal = normal;
         voxel.metalness = t;
         voxel.sharpness = asfloat(count_parents_not_found);
-        voxels[currentIndex.x + currentIndex.y * voxel_grid.dimension + currentIndex.z * voxel_grid.dimension * voxel_grid.dimension] = voxel;
+        VOXELS[currentIndex.x + currentIndex.y * voxelGrid.dimension + currentIndex.z * voxelGrid.dimension * voxelGrid.dimension] = voxel;
     }
 }

@@ -59,7 +59,6 @@ void Render::initialize()
         D3D12CreateDevice(adapter_.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device_));
     }
 
-
 #if !defined(NDEBUG)
 
     // enable break on validation errors and warnings
@@ -76,6 +75,7 @@ void Render::initialize()
        {},
        {0, nullptr, _countof(muted_severities), muted_severities, 0, nullptr }}; //_countof(muted_ids), muted_ids} };
     info_queue_->PushStorageFilter(&filter);
+
 #endif
 
     create_command_queue();
@@ -85,7 +85,12 @@ void Render::initialize()
     create_command_allocator();
     create_descriptor_heap();
     create_fence();
+
+    setup_viewport();
+
     init_imgui();
+
+    create_cmd_list();
 
     camera_ = new Camera();
     camera_->initialize();
@@ -144,35 +149,75 @@ void Render::create_swapchain()
 
 void Render::create_rtv_descriptor_heap()
 {
-    D3D12_DESCRIPTOR_HEAP_DESC rtv_heap_desc = {};
-    rtv_heap_desc.NumDescriptors = swapchain_buffer_count_;
-    rtv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-    rtv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-    device_->CreateDescriptorHeap(&rtv_heap_desc, IID_PPV_ARGS(rtv_heap_.ReleaseAndGetAddressOf()));
-    rtv_heap_->SetName(L"Main render target heap");
-
+    D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};
+    heap_desc.NumDescriptors = swapchain_buffer_count_;
+    heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+    heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    HRESULT_CHECK(device_->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(rtv_heap_.ReleaseAndGetAddressOf())));
+    rtv_heap_->SetName(L"Main render target heap (swapchain render targets)");
     rtv_descriptor_size_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+    heap_desc.NumDescriptors = 9;
+    HRESULT_CHECK(device_->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(gbuffer_heap_.ReleaseAndGetAddressOf())));
+    gbuffer_heap_->SetName(L"Deferred Rendering Render Targets Heap (GBuffers)");
+
+    heap_desc.NumDescriptors = 1;
+    heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+    HRESULT_CHECK(device_->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(dsv_heap_.ReleaseAndGetAddressOf())));
+    dsv_heap_->SetName(L"Deferred Rendering Depth Stencil Buffer");
 }
 
 void Render::create_render_target_views()
 {
-    CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap_->GetCPUDescriptorHandleForHeapStart());
+    {
+        CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap_->GetCPUDescriptorHandleForHeapStart());
 
-    for (int i = 0; i < swapchain_buffer_count_; ++i) {
-        HRESULT_CHECK(swapchain_->GetBuffer(i, IID_PPV_ARGS(render_targets_[i].ReleaseAndGetAddressOf())));
-        device_->CreateRenderTargetView(render_targets_[i].Get(), nullptr, rtv_handle);
-        rtv_handle.Offset(1, rtv_descriptor_size_);
+        for (int i = 0; i < swapchain_buffer_count_; ++i) {
+            HRESULT_CHECK(swapchain_->GetBuffer(i, IID_PPV_ARGS(render_targets_[i].ReleaseAndGetAddressOf())));
+            device_->CreateRenderTargetView(render_targets_[i].Get(), nullptr, rtv_handle);
+            rtv_handle.Offset(1, rtv_descriptor_size_);
+        }
+    }
+
+    {
+        D3D12_RESOURCE_DESC rt_desc = render_targets_[0]->GetDesc();
+
+        CD3DX12_CPU_DESCRIPTOR_HANDLE gbuffer_handle(gbuffer_heap_->GetCPUDescriptorHandleForHeapStart());
+        rt_desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        for (int i = 0; i < _countof(g_buffers_); ++i) {
+            HRESULT_CHECK(device_->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+                D3D12_HEAP_FLAG_NONE,
+                &rt_desc,
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                nullptr,
+                IID_PPV_ARGS(g_buffers_[i].ReleaseAndGetAddressOf())));
+            device_->CreateRenderTargetView(g_buffers_[i].Get(), nullptr, gbuffer_handle);
+            gbuffer_handle.Offset(1, rtv_descriptor_size_);
+        }
+
+        CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(dsv_heap_->GetCPUDescriptorHandleForHeapStart());
+        rt_desc.Format = DXGI_FORMAT_D32_FLOAT;
+        rt_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+        HRESULT_CHECK(device_->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+            D3D12_HEAP_FLAG_NONE,
+            &rt_desc,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_DEPTH_READ,
+            nullptr,
+            IID_PPV_ARGS(depth_stencil_.ReleaseAndGetAddressOf())));
+        device_->CreateDepthStencilView(depth_stencil_.Get(), nullptr, dsv_handle);
     }
 }
 
 void Render::create_command_allocator()
 {
-    HRESULT_CHECK(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(graphics_command_allocator_.ReleaseAndGetAddressOf())));
-    graphics_command_allocator_->SetName(L"Graphics command allocator");
-    graphics_command_allocator_->Reset();
-    HRESULT_CHECK(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(compute_command_allocator_.ReleaseAndGetAddressOf())));
-    compute_command_allocator_->SetName(L"Compute command allocator");
-    compute_command_allocator_->Reset();
+    for (int i = 0; i < swapchain_buffer_count_; ++i) {
+        HRESULT_CHECK(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(graphics_command_allocator_[i].ReleaseAndGetAddressOf())));
+        graphics_command_allocator_[i]->SetName(L"Graphics command allocator");
+        graphics_command_allocator_[i]->Reset();
+        HRESULT_CHECK(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(compute_command_allocator_[i].ReleaseAndGetAddressOf())));
+        compute_command_allocator_[i]->SetName(L"Compute command allocator");
+        compute_command_allocator_[i]->Reset();
+    }
 }
 
 void Render::create_descriptor_heap()
@@ -214,6 +259,14 @@ void Render::create_fence()
     }
 }
 
+void Render::setup_viewport()
+{
+    float width = Game::inst()->win().screen_width();
+    float height = Game::inst()->win().screen_height();
+    viewport_ = CD3DX12_VIEWPORT(0.0f, 0.0f, width, height);
+    scissor_rect_ = CD3DX12_RECT(0, 0, static_cast<LONG>(width), static_cast<LONG>(height));
+}
+
 void Render::init_imgui()
 {
     ImGui::SetCurrentContext(ImGui::CreateContext());
@@ -229,9 +282,20 @@ void Render::init_imgui()
     ImGui_ImplDX12_Init(device_.Get(), swapchain_buffer_count_, DXGI_FORMAT_R8G8B8A8_UNORM, imgui_srv_heap_.Get(),
         imgui_srv_heap_->GetCPUDescriptorHandleForHeapStart(), imgui_srv_heap_->GetGPUDescriptorHandleForHeapStart());
 
-    HRESULT_CHECK(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, graphics_command_allocator_.Get(), nullptr, IID_PPV_ARGS(imgui_graphics_command_list_.ReleaseAndGetAddressOf())));
-    imgui_graphics_command_list_->SetName(L"ImGui graphics command list");
-    imgui_graphics_command_list_->Close();
+    for (int i = 0; i < swapchain_buffer_count_; ++i) {
+        HRESULT_CHECK(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, graphics_command_allocator_[i].Get(), nullptr, IID_PPV_ARGS(imgui_graphics_command_list_[i].ReleaseAndGetAddressOf())));
+        imgui_graphics_command_list_[i]->SetName(L"ImGui graphics command list");
+        imgui_graphics_command_list_[i]->Close();
+    }
+}
+
+void Render::create_cmd_list()
+{
+    for (int i = 0; i < swapchain_buffer_count_; ++i) {
+        HRESULT_CHECK(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, graphics_command_allocator_[i].Get(), nullptr, IID_PPV_ARGS(cmd_list_[i].ReleaseAndGetAddressOf())));
+        cmd_list_[i]->SetName(L"Render internal cmd list");
+        cmd_list_[i]->Close();
+    }
 }
 
 void Render::destroy_command_queue()
@@ -247,6 +311,8 @@ void Render::destroy_swapchain()
 
 void Render::destroy_rtv_descriptor_heap()
 {
+    dsv_heap_.Reset();
+    gbuffer_heap_.Reset();
     rtv_heap_.Reset();
 }
 
@@ -259,8 +325,10 @@ void Render::destroy_render_target_views()
 
 void Render::destroy_command_allocator()
 {
-    graphics_command_allocator_.Reset();
-    compute_command_allocator_.Reset();
+    for (int i = 0; i < swapchain_buffer_count_; ++i) {
+        graphics_command_allocator_[i].Reset();
+        compute_command_allocator_[i].Reset();
+    }
 }
 
 void Render::destroy_descriptor_heap()
@@ -282,10 +350,19 @@ void Render::destroy_fence()
 
 void Render::term_imgui()
 {
-    imgui_graphics_command_list_.Reset();
+    for (int i = 0; i < swapchain_buffer_count_; ++i) {
+        imgui_graphics_command_list_[i].Reset();
+    }
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
+}
+
+void Render::destroy_cmd_list()
+{
+    for (int i = 0; i < swapchain_buffer_count_; ++i) {
+        cmd_list_[i].Reset();
+    }
 }
 
 void Render::resize()
@@ -299,6 +376,8 @@ void Render::resize()
                                 UINT(Game::inst()->win().screen_height()),
                                 DXGI_FORMAT_R8G8B8A8_UNORM,
                                 DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
+
+    setup_viewport();
 }
 
 void Render::fullscreen(bool is_fullscreen)
@@ -349,8 +428,24 @@ void Render::prepare_frame()
     HRESULT_CHECK(graphics_command_allocator()->Reset());
     HRESULT_CHECK(compute_command_allocator()->Reset());
 
+    HRESULT_CHECK(cmd_list_[frame_index_]->Reset(graphics_command_allocator().Get(), nullptr));
+    cmd_list_[frame_index_]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(render_targets_[frame_index_].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap_->GetCPUDescriptorHandleForHeapStart(), frame_index_, rtv_descriptor_size_);
+    FLOAT clear_color[4] = { 0.f, 0.f, 0.f, 0.f };
+    cmd_list_[frame_index_]->ClearRenderTargetView(rtv_handle, clear_color, 1, &scissor_rect());
+    HRESULT_CHECK(cmd_list_[frame_index_]->Close());
+    graphics_queue()->ExecuteCommandLists(1, (ID3D12CommandList*const*)cmd_list_[frame_index_].GetAddressOf());
+
     // update camera GPU resources
     camera_->update();
+}
+
+void Render::end_frame()
+{
+    HRESULT_CHECK(cmd_list_[frame_index_]->Reset(graphics_command_allocator().Get(), nullptr));
+    cmd_list_[frame_index_]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(render_targets_[frame_index_].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
+    HRESULT_CHECK(cmd_list_[frame_index_]->Close());
+    graphics_queue()->ExecuteCommandLists(1, (ID3D12CommandList* const*)cmd_list_[frame_index_].GetAddressOf());
 }
 
 void Render::prepare_imgui()
@@ -365,7 +460,7 @@ void Render::end_imgui()
     // Render dear imgui into screen
     ImGui::Render();
 
-    imgui_graphics_command_list_->Reset(graphics_command_allocator_.Get(), nullptr);
+    imgui_graphics_command_list_[frame_index_]->Reset(graphics_command_allocator().Get(), nullptr);
 
     D3D12_RESOURCE_BARRIER barrier = {};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -374,18 +469,18 @@ void Render::end_imgui()
     barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    imgui_graphics_command_list_->ResourceBarrier(1, &barrier);
+    imgui_graphics_command_list_[frame_index_]->ResourceBarrier(1, &barrier);
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap_->GetCPUDescriptorHandleForHeapStart(), frame_index_, rtv_descriptor_size_);
-    imgui_graphics_command_list_->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
-    imgui_graphics_command_list_->SetDescriptorHeaps(1, imgui_srv_heap_.GetAddressOf());
-    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), imgui_graphics_command_list_.Get());
+    imgui_graphics_command_list_[frame_index_]->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
+    imgui_graphics_command_list_[frame_index_]->SetDescriptorHeaps(1, imgui_srv_heap_.GetAddressOf());
+    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), imgui_graphics_command_list_[frame_index_].Get());
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-    imgui_graphics_command_list_->ResourceBarrier(1, &barrier);
-    imgui_graphics_command_list_->Close();
+    imgui_graphics_command_list_[frame_index_]->ResourceBarrier(1, &barrier);
+    imgui_graphics_command_list_[frame_index_]->Close();
 
-    graphics_queue()->ExecuteCommandLists(1, (ID3D12CommandList* const*)imgui_graphics_command_list_.GetAddressOf());
+    graphics_queue()->ExecuteCommandLists(1, (ID3D12CommandList* const*)imgui_graphics_command_list_[frame_index_].GetAddressOf());
 }
 
 void Render::present()
@@ -419,6 +514,8 @@ void Render::destroy_resources()
     camera_->destroy();
     delete camera_;
     camera_ = nullptr;
+
+    destroy_cmd_list();
 
     term_imgui();
 
@@ -467,12 +564,12 @@ const ComPtr<ID3D12CommandQueue>& Render::compute_queue() const
 
 const ComPtr<ID3D12CommandAllocator>& Render::graphics_command_allocator() const
 {
-    return graphics_command_allocator_;
+    return graphics_command_allocator_[frame_index_];
 }
 
 const ComPtr<ID3D12CommandAllocator>& Render::compute_command_allocator() const
 {
-    return compute_command_allocator_;
+    return compute_command_allocator_[frame_index_];
 }
 
 const ComPtr<ID3D12DescriptorHeap>& Render::resource_descriptor_heap() const
@@ -483,6 +580,16 @@ const ComPtr<ID3D12DescriptorHeap>& Render::resource_descriptor_heap() const
 const ComPtr<ID3D12DescriptorHeap>& Render::sampler_descriptor_heap() const
 {
     return sampler_descriptor_heap_;
+}
+
+const D3D12_VIEWPORT& Render::viewport() const
+{
+    return viewport_;
+}
+
+const D3D12_RECT& Render::scissor_rect() const
+{
+    return scissor_rect_;
 }
 
 UINT Render::allocate_resource_descriptor(D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handle)

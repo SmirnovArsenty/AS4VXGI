@@ -115,10 +115,7 @@ private:
     // } const_model_data_;
     // ConstBuffer<decltype(const_model_data_)> const_model_buffer_;
 
-    struct {
-        Matrix transform;
-        Matrix inverse_transpose_transform;
-    } model_data_;
+    MODEL_DATA_BIND model_data_;
     ConstBuffer<decltype(model_data_)> model_cb_;
     // DynamicBuffer<decltype(dynamic_model_data_)> dynamic_model_buffer_;
 

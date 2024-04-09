@@ -1,5 +1,4 @@
-#define CAMERA_REGISTER b0
-#include "framework/shaders/common/types.fx"
+#include "../../../framework/shaders/common/types.fx"
 
 struct VS_IN
 {
@@ -20,12 +19,6 @@ struct PS_IN
 struct PS_OUT
 {
     float4 color : SV_Target0;
-};
-
-cbuffer ModelData : register(b1)
-{
-    float4x4 transform;
-    float4x4 inverse_transpose_transform;
 };
 
 Texture2D<float4> albedo_tex : register(t0);
