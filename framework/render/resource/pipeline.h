@@ -36,6 +36,27 @@ public:
         }
     }
 
+    template<class bind>
+    int resource_index()
+    {
+        bind info;
+        for (int i = 0; i < descriptor_ranges_.size(); ++i) {
+            if (descriptor_ranges_[i].BaseShaderRegister == info.slot() && descriptor_ranges_[i].RegisterSpace == info.space()) {
+                return i;
+            }
+        }
+        char error_msg[256];
+        sprintf_s(error_msg, _countof(error_msg), "can't find registered range for current resource: %s slot: %d space: %d",
+            std::is_same<decltype(info.type()), CBV>::value ? "cbv"
+                                                            : (std::is_same<decltype(info.type()), SRV>::value ? "srv"
+                                                                                                                : "uav"),
+            info.slot(),
+            info.space());
+        OutputDebugString(error_msg);
+        assert(false);
+        return -1;
+    }
+
     virtual void create_command_list() = 0;
 
     ID3D12GraphicsCommandList* add_cmd() const;

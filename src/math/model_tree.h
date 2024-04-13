@@ -36,8 +36,8 @@ public:
 
     void draw(Camera* camera);
 
-    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> get_index_buffers_srv();
-    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> get_vertex_buffers_srv();
+    std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> get_index_buffers_srv();
+    std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> get_vertex_buffers_srv();
     std::vector<std::vector<uint32_t>> get_meshes_indices();
     std::vector<std::vector<Vertex>> get_meshes_vertices();
     Matrix get_transform() const { return model_data_.transform; }
@@ -57,13 +57,13 @@ private:
 
         void destroy();
 
-        void draw();
+        void draw(GraphicsPipeline& cmd_list);
 #ifndef NDEBUG
-        void debug_draw();
+        void debug_draw(GraphicsPipeline& cmd_list);
 #endif
 
-        D3D12_CPU_DESCRIPTOR_HANDLE get_index_buffer_srv() { return index_buffer_srv_; }
-        D3D12_CPU_DESCRIPTOR_HANDLE get_vertex_buffer_srv() { return vertex_buffer_srv_; }
+        D3D12_GPU_DESCRIPTOR_HANDLE& get_index_buffer_srv() { return index_buffer_srv_gpu_; }
+        D3D12_GPU_DESCRIPTOR_HANDLE& get_vertex_buffer_srv() { return vertex_buffer_srv_gpu_; }
 
         const std::vector<uint32_t>& get_indices() const;
         const std::vector<Vertex>& get_vertices() const;
@@ -85,8 +85,10 @@ private:
         VertexBuffer<Vertex> vertex_buffer_;
 
         D3D12_CPU_DESCRIPTOR_HANDLE index_buffer_srv_;
+        D3D12_GPU_DESCRIPTOR_HANDLE index_buffer_srv_gpu_;
         UINT index_buffer_srv_resource_index_;
         D3D12_CPU_DESCRIPTOR_HANDLE vertex_buffer_srv_;
+        D3D12_GPU_DESCRIPTOR_HANDLE vertex_buffer_srv_gpu_;
         UINT vertex_buffer_srv_resource_index_;
 
         std::unordered_map<int32_t, MeshTreeNode> mesh_tree_;
@@ -99,6 +101,7 @@ private:
         void* box_transformations_mapped_ptr_ = nullptr;
         UINT box_transformation_resource_index_;
         D3D12_CPU_DESCRIPTOR_HANDLE box_transformations_srv_;
+        D3D12_GPU_DESCRIPTOR_HANDLE box_transformations_srv_gpu_;
 
         IndexBuffer box_index_buffer_;
         VertexBuffer<Vector4> box_vertex_buffer_;

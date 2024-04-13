@@ -22,12 +22,13 @@ public:
 private:
     std::vector<ModelTree*> model_trees_;
 
-    ConstBuffer<COMMON_BIND> common_cb_;
-    COMMON_BIND common_;
+    VOXEL_DATA_BIND voxel_data_;
+    ConstBuffer<VOXEL_DATA_BIND> voxel_data_cb_;
 
     ComPtr<ID3D12Resource> uav_voxels_resource_;
     UINT uav_voxels_resource_index_;
     D3D12_CPU_DESCRIPTOR_HANDLE uav_voxels_;
+    D3D12_GPU_DESCRIPTOR_HANDLE uav_voxels_gpu_;
 
     /////
     // stage1 - clear storage
@@ -39,11 +40,13 @@ private:
     ComputePipeline* stage_2_pipeline_ = nullptr;
     /////
 
-    // std::vector<std::vector<ShaderResource<MeshTreeNode>*>> mesh_trees_;
-    // std::vector<std::vector<ID3D11ShaderResourceView*>> index_buffers_srv_;
-    // std::vector<std::vector<ID3D11ShaderResourceView*>> vertex_buffers_srv_;
-    // std::vector<std::vector<ShaderResource<Matrix>*>> model_matrix_srv_;
+    std::vector<std::vector<ShaderResource<MeshTreeNode>*>> mesh_trees_srv_;
+    std::vector<std::vector<D3D12_GPU_DESCRIPTOR_HANDLE>> index_buffers_srv_;
+    std::vector<std::vector<D3D12_GPU_DESCRIPTOR_HANDLE>> vertex_buffers_srv_;
+    std::vector<std::vector<ShaderResource<Matrix>*>> model_matrix_srv_;
 // #ifndef NDEBUG
+    ComPtr<ID3D12Fence> fence_ = nullptr;
+    uint64_t fence_value_ = 0;
     GraphicsPipeline* stage_visualize_pipeline_ = nullptr;
 // #endif
 };

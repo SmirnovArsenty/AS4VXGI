@@ -157,14 +157,15 @@ void Render::create_rtv_descriptor_heap()
     rtv_heap_->SetName(L"Main render target heap (swapchain render targets)");
     rtv_descriptor_size_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
-    heap_desc.NumDescriptors = 9;
+    heap_desc.NumDescriptors = 8 * swapchain_buffer_count_;
     HRESULT_CHECK(device_->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(gbuffer_heap_.ReleaseAndGetAddressOf())));
     gbuffer_heap_->SetName(L"Deferred Rendering Render Targets Heap (GBuffers)");
 
-    heap_desc.NumDescriptors = 1;
+    heap_desc.NumDescriptors = swapchain_buffer_count_;
     heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
     HRESULT_CHECK(device_->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(dsv_heap_.ReleaseAndGetAddressOf())));
     dsv_heap_->SetName(L"Deferred Rendering Depth Stencil Buffer");
+    dsv_descriptor_size_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 }
 
 void Render::create_render_target_views()
@@ -180,31 +181,40 @@ void Render::create_render_target_views()
     }
 
     {
-        D3D12_RESOURCE_DESC rt_desc = render_targets_[0]->GetDesc();
+        for (int i = 0; i < swapchain_buffer_count_; ++i) {
+            D3D12_RESOURCE_DESC rt_desc = render_targets_[i]->GetDesc();
 
-        CD3DX12_CPU_DESCRIPTOR_HANDLE gbuffer_handle(gbuffer_heap_->GetCPUDescriptorHandleForHeapStart());
-        rt_desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-        for (int i = 0; i < _countof(g_buffers_); ++i) {
-            HRESULT_CHECK(device_->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-                D3D12_HEAP_FLAG_NONE,
-                &rt_desc,
-                D3D12_RESOURCE_STATE_RENDER_TARGET,
-                nullptr,
-                IID_PPV_ARGS(g_buffers_[i].ReleaseAndGetAddressOf())));
-            device_->CreateRenderTargetView(g_buffers_[i].Get(), nullptr, gbuffer_handle);
-            gbuffer_handle.Offset(1, rtv_descriptor_size_);
+            rt_desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+            for (int j = 0; j < _countof(g_buffers_[i]); ++j) {
+                CD3DX12_CPU_DESCRIPTOR_HANDLE gbuffer_handle(gbuffer_heap_->GetCPUDescriptorHandleForHeapStart(), i * _countof(g_buffers_[i]) + j, rtv_descriptor_size_);
+                D3D12_CLEAR_VALUE clear{};
+                clear.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+                HRESULT_CHECK(device_->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+                    D3D12_HEAP_FLAG_NONE,
+                    &rt_desc,
+                    D3D12_RESOURCE_STATE_RENDER_TARGET,
+                    &clear,
+                    IID_PPV_ARGS(g_buffers_[i][j].ReleaseAndGetAddressOf())));
+                device_->CreateRenderTargetView(g_buffers_[i][j].Get(), nullptr, gbuffer_handle);
+            }
+
+            {
+                CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(dsv_heap_->GetCPUDescriptorHandleForHeapStart(), i, dsv_descriptor_size_);
+                rt_desc.Format = DXGI_FORMAT_D32_FLOAT;
+                rt_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+                D3D12_CLEAR_VALUE clear{};
+                clear.Format = DXGI_FORMAT_D32_FLOAT;
+                clear.DepthStencil.Depth = 1.f;
+                clear.DepthStencil.Stencil = 0;
+                HRESULT_CHECK(device_->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+                    D3D12_HEAP_FLAG_NONE,
+                    &rt_desc,
+                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_DEPTH_READ,
+                    &clear,
+                    IID_PPV_ARGS(depth_stencil_[i].ReleaseAndGetAddressOf())));
+                device_->CreateDepthStencilView(depth_stencil_[i].Get(), nullptr, dsv_handle);
+            }
         }
-
-        CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(dsv_heap_->GetCPUDescriptorHandleForHeapStart());
-        rt_desc.Format = DXGI_FORMAT_D32_FLOAT;
-        rt_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-        HRESULT_CHECK(device_->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-            D3D12_HEAP_FLAG_NONE,
-            &rt_desc,
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_DEPTH_READ,
-            nullptr,
-            IID_PPV_ARGS(depth_stencil_.ReleaseAndGetAddressOf())));
-        device_->CreateDepthStencilView(depth_stencil_.Get(), nullptr, dsv_handle);
     }
 }
 
@@ -429,10 +439,15 @@ void Render::prepare_frame()
     HRESULT_CHECK(compute_command_allocator()->Reset());
 
     HRESULT_CHECK(cmd_list_[frame_index_]->Reset(graphics_command_allocator().Get(), nullptr));
+
     cmd_list_[frame_index_]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(render_targets_[frame_index_].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
-    CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap_->GetCPUDescriptorHandleForHeapStart(), frame_index_, rtv_descriptor_size_);
+    cmd_list_[frame_index_]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(depth_stencil_[frame_index_].Get(),
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_DEPTH_READ, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+
     FLOAT clear_color[4] = { 0.f, 0.f, 0.f, 0.f };
-    cmd_list_[frame_index_]->ClearRenderTargetView(rtv_handle, clear_color, 1, &scissor_rect());
+    cmd_list_[frame_index_]->ClearRenderTargetView(render_target(), clear_color, 0, nullptr);
+    cmd_list_[frame_index_]->ClearDepthStencilView(depth_stencil(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.f, 0, 0, nullptr);
+
     HRESULT_CHECK(cmd_list_[frame_index_]->Close());
     graphics_queue()->ExecuteCommandLists(1, (ID3D12CommandList*const*)cmd_list_[frame_index_].GetAddressOf());
 
@@ -444,6 +459,8 @@ void Render::end_frame()
 {
     HRESULT_CHECK(cmd_list_[frame_index_]->Reset(graphics_command_allocator().Get(), nullptr));
     cmd_list_[frame_index_]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(render_targets_[frame_index_].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
+    cmd_list_[frame_index_]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(depth_stencil_[frame_index_].Get(),
+        D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_DEPTH_READ));
     HRESULT_CHECK(cmd_list_[frame_index_]->Close());
     graphics_queue()->ExecuteCommandLists(1, (ID3D12CommandList* const*)cmd_list_[frame_index_].GetAddressOf());
 }
@@ -582,6 +599,16 @@ const ComPtr<ID3D12DescriptorHeap>& Render::sampler_descriptor_heap() const
     return sampler_descriptor_heap_;
 }
 
+D3D12_CPU_DESCRIPTOR_HANDLE Render::render_target() const
+{
+    return CD3DX12_CPU_DESCRIPTOR_HANDLE(rtv_heap_->GetCPUDescriptorHandleForHeapStart(), frame_index_, rtv_descriptor_size_);
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE Render::depth_stencil() const
+{
+    return CD3DX12_CPU_DESCRIPTOR_HANDLE(dsv_heap_->GetCPUDescriptorHandleForHeapStart(), frame_index_, dsv_descriptor_size_);
+}
+
 const D3D12_VIEWPORT& Render::viewport() const
 {
     return viewport_;
@@ -592,10 +619,17 @@ const D3D12_RECT& Render::scissor_rect() const
     return scissor_rect_;
 }
 
-UINT Render::allocate_resource_descriptor(D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handle)
+UINT Render::allocate_resource_descriptor(D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE& gpu_handle)
 {
-    CD3DX12_CPU_DESCRIPTOR_HANDLE handle(resource_descriptor_heap_->GetCPUDescriptorHandleForHeapStart());
-    handle.Offset(resources_allocated_, resource_descriptor_size_);
-    cpu_handle = handle;
+    {
+        CD3DX12_CPU_DESCRIPTOR_HANDLE handle(resource_descriptor_heap_->GetCPUDescriptorHandleForHeapStart());
+        handle.Offset(resources_allocated_, resource_descriptor_size_);
+        cpu_handle = handle;
+    }
+    {
+        CD3DX12_GPU_DESCRIPTOR_HANDLE handle(resource_descriptor_heap_->GetGPUDescriptorHandleForHeapStart());
+        handle.Offset(resources_allocated_, resource_descriptor_size_);
+        gpu_handle = handle;
+    }
     return resources_allocated_++;
 }

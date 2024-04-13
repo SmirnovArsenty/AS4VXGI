@@ -6,6 +6,8 @@ using namespace DirectX::SimpleMath;
 
 #include "shaders/common/types.fx"
 
+#include "render/resource/buffer.hpp"
+
 class Camera
 {
 public:
@@ -54,14 +56,21 @@ public:
     void move_right(float delta);
     void move_up(float delta);
 
+    const D3D12_GPU_DESCRIPTOR_HANDLE& gpu_descriptor_handle() const
+    {
+        return camera_data_cb_.gpu_descriptor_handle();
+    }
+
 private:
     bool durty_{ true };
-
-    CameraData camera_data_;
 
     CameraType type_{ CameraType::perspective };
     bool focus_{ true };
     Vector3 focus_target_{ 0.f, 0.f, 0.f };
     float focus_min_distance_{ 0.f };
     float focus_distance_{ 0.f };
+
+    // gpu data
+    ConstBuffer<CAMERA_DATA_BIND> camera_data_cb_;
+    CAMERA_DATA_BIND camera_data_;
 };

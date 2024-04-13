@@ -45,6 +45,7 @@ private:
     UINT frame_index_;
 
     UINT rtv_descriptor_size_{ 0 };
+    UINT dsv_descriptor_size_{ 0 };
     // create_rtv_descriptor_heap
     // swapchain buffers
     ComPtr<ID3D12DescriptorHeap> rtv_heap_;
@@ -56,8 +57,8 @@ private:
     ComPtr<ID3D12Resource> render_targets_[swapchain_buffer_count_];
 
     // deferred pass render targets
-    ComPtr<ID3D12Resource> g_buffers_[8];
-    ComPtr<ID3D12Resource> depth_stencil_;
+    ComPtr<ID3D12Resource> g_buffers_[swapchain_buffer_count_][8];
+    ComPtr<ID3D12Resource> depth_stencil_[swapchain_buffer_count_];
 
     // create_command_allocator
     ComPtr<ID3D12CommandAllocator> graphics_command_allocator_[swapchain_buffer_count_];
@@ -143,8 +144,12 @@ public:
     const ComPtr<ID3D12DescriptorHeap>& resource_descriptor_heap() const;
     const ComPtr<ID3D12DescriptorHeap>& sampler_descriptor_heap() const;
 
+    D3D12_CPU_DESCRIPTOR_HANDLE render_target() const;
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> gbuffer_render_targets() const;
+    D3D12_CPU_DESCRIPTOR_HANDLE depth_stencil() const;
+
     const D3D12_VIEWPORT& viewport() const;
     const D3D12_RECT& scissor_rect() const;
 
-    UINT allocate_resource_descriptor(D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handle);
+    UINT allocate_resource_descriptor(D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE& gpu_handle);
 };

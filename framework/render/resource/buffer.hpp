@@ -19,6 +19,7 @@ private:
     ComPtr<ID3D12Resource> resource_;
     UINT resource_index_;
     D3D12_CPU_DESCRIPTOR_HANDLE resource_view_;
+    D3D12_GPU_DESCRIPTOR_HANDLE resource_view_gpu_;
     void* mapped_ptr_ = nullptr;
 public:
     ConstBuffer() = default;
@@ -44,7 +45,7 @@ public:
             nullptr,
             IID_PPV_ARGS(resource_.ReleaseAndGetAddressOf())));
 
-        resource_index_ = Game::inst()->render().allocate_resource_descriptor(resource_view_);
+        resource_index_ = Game::inst()->render().allocate_resource_descriptor(resource_view_, resource_view_gpu_);
 
         D3D12_CONSTANT_BUFFER_VIEW_DESC desc = {};
         desc.BufferLocation = resource_->GetGPUVirtualAddress();
@@ -59,6 +60,79 @@ public:
     {
         assert(mapped_ptr_ != nullptr);
         memcpy(mapped_ptr_, &data, sizeof(T));
+    }
+
+    const D3D12_CPU_DESCRIPTOR_HANDLE& cpu_descriptor_handle() const
+    {
+        return resource_view_;
+    }
+
+    const D3D12_GPU_DESCRIPTOR_HANDLE& gpu_descriptor_handle() const
+    {
+        return resource_view_gpu_;
+    }
+};
+
+template<class T>
+class ShaderResource
+{
+private:
+    ComPtr<ID3D12Resource> resource_;
+    UINT resource_index_;
+    D3D12_CPU_DESCRIPTOR_HANDLE resource_view_;
+    D3D12_GPU_DESCRIPTOR_HANDLE resource_view_gpu_;
+
+    UINT size_;
+public:
+    ShaderResource() = default;
+    ~ShaderResource() = default;
+
+    void initialize(T* data, UINT size)
+    {
+        size_ = size;
+
+        auto& device = Game::inst()->render().device();
+
+        HRESULT_CHECK(device->CreateCommittedResource(
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            D3D12_HEAP_FLAG_NONE,
+            &CD3DX12_RESOURCE_DESC::Buffer(sizeof(T)),
+            D3D12_RESOURCE_STATE_COMMON,
+            nullptr,
+            IID_PPV_ARGS(resource_.ReleaseAndGetAddressOf())));
+
+        CD3DX12_RANGE range(0, 0);
+        void* mapped_ptr = nullptr;
+        HRESULT_CHECK(resource_->Map(0, &range, &mapped_ptr));
+        memcpy(mapped_ptr, data, sizeof(T) * size);
+        resource_->Unmap(0, &range);
+
+        resource_index_ = Game::inst()->render().allocate_resource_descriptor(resource_view_, resource_view_gpu_);
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
+        desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        desc.Format = DXGI_FORMAT_UNKNOWN;
+        desc.Buffer.FirstElement = 0;
+        desc.Buffer.NumElements = size;
+        desc.Buffer.StructureByteStride = sizeof(T);
+        desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+        desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        device->CreateShaderResourceView(resource_.Get(), &desc, resource_view_);
+    }
+
+    UINT size() const
+    {
+        return size_;
+    }
+
+    const D3D12_CPU_DESCRIPTOR_HANDLE& cpu_descriptor_handle() const
+    {
+        return resource_view_;
+    }
+
+    const D3D12_GPU_DESCRIPTOR_HANDLE& gpu_descriptor_handle() const
+    {
+        return resource_view_gpu_;
     }
 };
 
@@ -108,7 +182,7 @@ public:
         return resource_.Get();
     }
 
-    D3D12_INDEX_BUFFER_VIEW view() const
+    const D3D12_INDEX_BUFFER_VIEW& view() const
     {
         return view_;
     }
@@ -161,7 +235,7 @@ public:
         return resource_.Get();
     }
 
-    D3D12_VERTEX_BUFFER_VIEW view() const
+    const D3D12_VERTEX_BUFFER_VIEW& view() const
     {
         return view_;
     }

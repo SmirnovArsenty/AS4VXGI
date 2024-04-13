@@ -51,10 +51,10 @@ struct MeshTreeNode
     int count;
 };
 
-DECLARE_CBV(COMMON, 0, 0)
+// space 0
+DECLARE_CBV(CAMERA_DATA, 0, 0)
 {
     CameraData cameraData;
-    VoxelGrid voxelGrid;
 };
 DECLARE_CBV(MODEL_DATA, 1, 0)
 {
@@ -62,13 +62,17 @@ DECLARE_CBV(MODEL_DATA, 1, 0)
     MATRIX inverse_transpose_transform;
     MATRIX dummy[2];
 };
+DECLARE_SRV(MESH_TREE, MeshTreeNode, 2, 0)
+DECLARE_SRV(INDICES, int, 3, 0)
+DECLARE_SRV(VERTICES, Vertex, 4, 0)
+DECLARE_SRV(MODEL_MATRICES, MATRIX, 5, 0)
+DECLARE_SRV(BOX_TRANSFORM, MATRIX, 6, 0)
 
-DECLARE_UAV(VOXELS, Voxel, 0, 0)
-
-DECLARE_SRV(MESH_TREE, MeshTreeNode, 0, 0)
-DECLARE_SRV(INDICES, int, 1, 0)
-DECLARE_SRV(VERTICES, Vertex, 2, 0)
-DECLARE_SRV(MODEL_MATRICES, MATRIX, 3, 0)
-DECLARE_SRV(BOX_TRANSFORM, MATRIX, 4, 0)
+// space 1
+DECLARE_CBV(VOXEL_DATA, 0, 1)
+{
+    VoxelGrid voxelGrid;
+};
+DECLARE_UAV(VOXELS, Voxel, 1, 1)
 
 #endif // __TYPES_FX__

@@ -81,8 +81,8 @@ void ModelTree::Mesh::initialize(//Material& material,
 
     index_buffer_.initialize(indices_);
     { // index buffer srv
-        index_buffer_srv_resource_index_ = Game::inst()->render().allocate_resource_descriptor(index_buffer_srv_);
-        D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
+        index_buffer_srv_resource_index_ = Game::inst()->render().allocate_resource_descriptor(index_buffer_srv_, index_buffer_srv_gpu_);
+        D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
         desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
         desc.Format = DXGI_FORMAT_UNKNOWN;
         desc.Buffer.FirstElement = 0;
@@ -93,8 +93,8 @@ void ModelTree::Mesh::initialize(//Material& material,
     }
     vertex_buffer_.initialize(vertices_);
     { // vertex buffer srv
-        vertex_buffer_srv_resource_index_ = Game::inst()->render().allocate_resource_descriptor(vertex_buffer_srv_);
-        D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
+        vertex_buffer_srv_resource_index_ = Game::inst()->render().allocate_resource_descriptor(vertex_buffer_srv_, vertex_buffer_srv_gpu_);
+        D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
         desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
         desc.Format = DXGI_FORMAT_UNKNOWN;
         desc.Buffer.FirstElement = 0;
@@ -112,13 +112,8 @@ void ModelTree::Mesh::initialize(//Material& material,
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
     };
     box_visualize_pipeline_.setup_input_layout(inputs, _countof(inputs));
-    box_visualize_pipeline_.declare_bind<COMMON_BIND>();
+    box_visualize_pipeline_.declare_bind<CAMERA_DATA_BIND>();
     box_visualize_pipeline_.declare_bind<MODEL_DATA_BIND>();
-    box_visualize_pipeline_.declare_bind<VOXELS_BIND>();
-    box_visualize_pipeline_.declare_bind<MESH_TREE_BIND>();
-    box_visualize_pipeline_.declare_bind<INDICES_BIND>();
-    box_visualize_pipeline_.declare_bind<VERTICES_BIND>();
-    box_visualize_pipeline_.declare_bind<MODEL_MATRICES_BIND>();
     box_visualize_pipeline_.declare_bind<BOX_TRANSFORM_BIND>();
     box_visualize_pipeline_.create_command_list();
 
@@ -201,7 +196,7 @@ void ModelTree::Mesh::initialize(//Material& material,
         HRESULT_CHECK(box_transformations_->Map(0, &range, &box_transformations_mapped_ptr_));
         memcpy(box_transformations_mapped_ptr_, box_transformations.data(), box_transformations.size() * sizeof(Matrix));
 
-        box_transformation_resource_index_ = Game::inst()->render().allocate_resource_descriptor(box_transformations_srv_);
+        box_transformation_resource_index_ = Game::inst()->render().allocate_resource_descriptor(box_transformations_srv_, box_transformations_srv_gpu_);
 
         D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
         desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
@@ -233,9 +228,11 @@ void ModelTree::Mesh::destroy()
 // #endif
 }
 
-void ModelTree::Mesh::draw()
+void ModelTree::Mesh::draw(GraphicsPipeline& cmd_list)
 {
-
+    cmd_list.add_cmd()->IASetIndexBuffer(&index_buffer_.view());
+    cmd_list.add_cmd()->IASetVertexBuffers(0, 1, &vertex_buffer_.view());
+    cmd_list.add_cmd()->DrawIndexedInstanced(index_count_, 1, 0, 0, 0);
 //     index_buffer_.bind();
 //     vertex_buffer_.bind(0U);
 //     material_.use();
@@ -246,8 +243,9 @@ void ModelTree::Mesh::draw()
 }
 
 #ifndef NDEBUG
-void ModelTree::Mesh::debug_draw()
+void ModelTree::Mesh::debug_draw(GraphicsPipeline& cmd_list)
 {
+    cmd_list.add_cmd()->SetGraphicsRootDescriptorTable(cmd_list.resource_index<BOX_TRANSFORM_BIND>(), box_transformations_srv_gpu_);
 //     box_shader_.use();
 // 
 //     auto context = Game::inst()->render().context();
@@ -281,6 +279,12 @@ void ModelTree::load(const std::string& file, Vector3 position, Quaternion rotat
         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
     };
     graphics_pipeline_.setup_input_layout(inputs, _countof(inputs));
+    CD3DX12_DEPTH_STENCIL_DESC ds_state(D3D12_DEFAULT);
+    ds_state.DepthEnable = true;
+    ds_state.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    ds_state.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    graphics_pipeline_.setup_depth_stencil_state(ds_state);
+
     if (0) {
         graphics_pipeline_.attach_vertex_shader(L"./resources/shaders/debug/albedo.hlsl", {});
         graphics_pipeline_.attach_pixel_shader(L"./resources/shaders/debug/albedo.hlsl", {});
@@ -289,7 +293,7 @@ void ModelTree::load(const std::string& file, Vector3 position, Quaternion rotat
         graphics_pipeline_.attach_pixel_shader(L"./resources/shaders/debug/normal.hlsl", {});
     }
 
-    graphics_pipeline_.declare_bind<COMMON_BIND>();
+    graphics_pipeline_.declare_bind<CAMERA_DATA_BIND>();
     graphics_pipeline_.declare_bind<MODEL_DATA_BIND>();
     graphics_pipeline_.create_command_list();
 
@@ -340,25 +344,34 @@ void ModelTree::draw(Camera* camera)
     // // albedo_shader_.use();
     // normal_shader_.use();
     // camera->bind();
-    // for (Mesh* mesh : meshes_) {
-    //     mesh->draw();
-    // }
-
-    auto& graphics_command_allocator = Game::inst()->render().graphics_command_allocator();
+    auto& render_target = Game::inst()->render().render_target();
+    auto& depth_stencil_target = Game::inst()->render().depth_stencil();
+    auto& resource_descriptor_heap = Game::inst()->render().resource_descriptor_heap();
+    auto& command_list_allocator = Game::inst()->render().graphics_command_allocator();
     auto& graphics_queue = Game::inst()->render().graphics_queue();
+    for (Mesh* mesh : meshes_) {
+        graphics_pipeline_.add_cmd()->Reset(command_list_allocator.Get(), graphics_pipeline_.get_pso());
+        graphics_pipeline_.add_cmd()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        graphics_pipeline_.add_cmd()->RSSetViewports(1, &Game::inst()->render().viewport());
+        graphics_pipeline_.add_cmd()->RSSetScissorRects(1, &Game::inst()->render().scissor_rect());
+        graphics_pipeline_.add_cmd()->OMSetRenderTargets(1, &render_target, 1, &depth_stencil_target);
 
-    // graphics_pipeline_.add_cmd()->Reset(graphics_command_allocator.Get(), graphics_pipeline_.get_pso());
-    // graphics_pipeline_.add_cmd()->SetGraphicsRootSignature(graphics_pipeline_.get_root_signature());
-    // graphics_pipeline_.add_cmd()->RSSetViewports(1, &Game::inst()->render().viewport());
-    // graphics_pipeline_.add_cmd()->RSSetScissorRects(1, &Game::inst()->render().scissor_rect());
+        // bind resources
+        graphics_pipeline_.add_cmd()->SetGraphicsRootSignature(graphics_pipeline_.get_root_signature());
+        graphics_pipeline_.add_cmd()->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
+        graphics_pipeline_.add_cmd()->SetGraphicsRootDescriptorTable(graphics_pipeline_.resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
+        graphics_pipeline_.add_cmd()->SetGraphicsRootDescriptorTable(graphics_pipeline_.resource_index<MODEL_DATA_BIND>(), model_cb_.gpu_descriptor_handle());
 
-    // graphics_pipeline_.add_cmd()->Close();
-    // ID3D12CommandList* cmd_list[] = { graphics_pipeline_.add_cmd() };
-    // graphics_queue->ExecuteCommandLists(1, cmd_list);
+        mesh->draw(graphics_pipeline_);
+
+        graphics_pipeline_.add_cmd()->Close();
+        ID3D12CommandList* list = graphics_pipeline_.add_cmd();
+        graphics_queue->ExecuteCommandLists(1, &list);
+    }
 
 #ifndef NDEBUG
     for (Mesh* mesh : meshes_) {
-        mesh->debug_draw();
+        //mesh->debug_draw();
     }
 #endif
 }
@@ -383,25 +396,25 @@ std::vector<std::vector<Vertex>> ModelTree::get_meshes_vertices()
     return result;
 }
 
-// std::vector<ID3D11ShaderResourceView*> ModelTree::get_index_buffers_srv()
-// {
-//     std::vector<ID3D11ShaderResourceView*> result;
-//     result.reserve(meshes_.size());
-//     for (Mesh* mesh : meshes_) {
-//         result.push_back(mesh->get_index_buffer_srv());
-//     }
-//     return result;
-// }
-// 
-// std::vector<ID3D11ShaderResourceView*> ModelTree::get_vertex_buffers_srv()
-// {
-//     std::vector<ID3D11ShaderResourceView*> result;
-//     result.reserve(meshes_.size());
-//     for (Mesh* mesh : meshes_) {
-//         result.push_back(mesh->get_vertex_buffer_srv());
-//     }
-//     return result;
-// }
+std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> ModelTree::get_index_buffers_srv()
+{
+    std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> result;
+    result.reserve(meshes_.size());
+    for (Mesh* mesh : meshes_) {
+        result.push_back(mesh->get_index_buffer_srv());
+    }
+    return result;
+}
+
+std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> ModelTree::get_vertex_buffers_srv()
+{
+    std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> result;
+    result.reserve(meshes_.size());
+    for (Mesh* mesh : meshes_) {
+        result.push_back(mesh->get_vertex_buffer_srv());
+    }
+    return result;
+}
 
 std::vector<std::vector<MeshTreeNode>> ModelTree::get_meshes_trees()
 {
@@ -554,10 +567,10 @@ void ModelTree::load_mesh(aiMesh* mesh, const aiScene* scene)
     // fill indices
     uint32_t vertices_count = (uint32_t)vertices.size();
     indices.reserve(mesh->mNumFaces * 3);
-    for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
+    for (uint32_t i = 0; i < mesh->mNumFaces; ++i) {
         auto& face = mesh->mFaces[i];
         assert(face.mNumIndices == 3);
-        for (uint32_t j = 0; j < face.mNumIndices; j++) {
+        for (int32_t j = face.mNumIndices - 1; j >= 0; --j) {
             assert(face.mIndices[j] < vertices_count);
             indices.push_back(face.mIndices[j]);
         }
