@@ -87,6 +87,7 @@ target_link_libraries(framework
     assimp
     directxtk
     imgui
+    ${CMAKE_CURRENT_SOURCE_DIR}/render/lib/WinPixEventRuntime.lib
 )
 target_include_directories(framework
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/

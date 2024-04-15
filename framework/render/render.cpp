@@ -94,13 +94,6 @@ void Render::initialize()
 
     camera_ = new Camera();
     camera_->initialize();
-    // camera_->set_camera(Vector3(100.f), Vector3(0.f, 0.f, 1.f));
-
-    // ImGui::CreateContext();
-    // ImGuiIO& io = ImGui::GetIO();
-    // io.IniFilename = NULL;
-    // ImGui_ImplWin32_Init(hWnd);
-    // ImGui_ImplDX12_Init(device_.Get(), context_.Get());
 }
 
 void Render::create_command_queue()
@@ -138,9 +131,6 @@ void Render::create_swapchain()
     ComPtr<IDXGISwapChain1> swapchain;
     factory_->CreateSwapChainForHwnd(graphics_queue_.Get(), Game::inst()->win().window(), &swapchain_desc, &fullscreen_desc, nullptr, &swapchain);
     swapchain.As(&swapchain_);
-
-    // swapchain_->SetMaximumFrameLatency(swapchain_buffer_count_);
-    // swapchain_waitable_object_ = swapchain_->GetFrameLatencyWaitableObject();
 
     factory_->MakeWindowAssociation(Game::inst()->win().window(), DXGI_MWA_NO_ALT_ENTER);
 
@@ -439,6 +429,7 @@ void Render::prepare_frame()
     HRESULT_CHECK(compute_command_allocator()->Reset());
 
     HRESULT_CHECK(cmd_list_[frame_index_]->Reset(graphics_command_allocator().Get(), nullptr));
+    PIXBeginEvent(cmd_list_[frame_index_].Get(), 0xFFFFFFFF, "Prepare frame");
 
     cmd_list_[frame_index_]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(render_targets_[frame_index_].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
     cmd_list_[frame_index_]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(depth_stencil_[frame_index_].Get(),
@@ -448,6 +439,7 @@ void Render::prepare_frame()
     cmd_list_[frame_index_]->ClearRenderTargetView(render_target(), clear_color, 0, nullptr);
     cmd_list_[frame_index_]->ClearDepthStencilView(depth_stencil(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.f, 0, 0, nullptr);
 
+    PIXEndEvent(cmd_list_[frame_index_].Get());
     HRESULT_CHECK(cmd_list_[frame_index_]->Close());
     graphics_queue()->ExecuteCommandLists(1, (ID3D12CommandList*const*)cmd_list_[frame_index_].GetAddressOf());
 
@@ -457,12 +449,6 @@ void Render::prepare_frame()
 
 void Render::end_frame()
 {
-    HRESULT_CHECK(cmd_list_[frame_index_]->Reset(graphics_command_allocator().Get(), nullptr));
-    cmd_list_[frame_index_]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(render_targets_[frame_index_].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
-    cmd_list_[frame_index_]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(depth_stencil_[frame_index_].Get(),
-        D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_DEPTH_READ));
-    HRESULT_CHECK(cmd_list_[frame_index_]->Close());
-    graphics_queue()->ExecuteCommandLists(1, (ID3D12CommandList* const*)cmd_list_[frame_index_].GetAddressOf());
 }
 
 void Render::prepare_imgui()
@@ -478,23 +464,14 @@ void Render::end_imgui()
     ImGui::Render();
 
     imgui_graphics_command_list_[frame_index_]->Reset(graphics_command_allocator().Get(), nullptr);
-
-    D3D12_RESOURCE_BARRIER barrier = {};
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barrier.Transition.pResource = render_targets_[frame_index_].Get();
-    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    imgui_graphics_command_list_[frame_index_]->ResourceBarrier(1, &barrier);
+    PIXBeginEvent(imgui_graphics_command_list_[frame_index_].Get(), 0xFFFFFFFF, "ImGui");
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap_->GetCPUDescriptorHandleForHeapStart(), frame_index_, rtv_descriptor_size_);
     imgui_graphics_command_list_[frame_index_]->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
     imgui_graphics_command_list_[frame_index_]->SetDescriptorHeaps(1, imgui_srv_heap_.GetAddressOf());
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), imgui_graphics_command_list_[frame_index_].Get());
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-    imgui_graphics_command_list_[frame_index_]->ResourceBarrier(1, &barrier);
+
+    PIXEndEvent(imgui_graphics_command_list_[frame_index_].Get());
     imgui_graphics_command_list_[frame_index_]->Close();
 
     graphics_queue()->ExecuteCommandLists(1, (ID3D12CommandList* const*)imgui_graphics_command_list_[frame_index_].GetAddressOf());
@@ -502,25 +479,37 @@ void Render::end_imgui()
 
 void Render::present()
 {
+    HRESULT_CHECK(cmd_list_[frame_index_]->Reset(graphics_command_allocator().Get(), nullptr));
+    PIXBeginEvent(cmd_list_[frame_index_].Get(), 0xFFFFFFFF, "render target transition to present");
+    cmd_list_[frame_index_]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(render_targets_[frame_index_].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
+    cmd_list_[frame_index_]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(depth_stencil_[frame_index_].Get(),
+        D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_DEPTH_READ));
+    PIXEndEvent(cmd_list_[frame_index_].Get());
+    HRESULT_CHECK(cmd_list_[frame_index_]->Close());
+    graphics_queue()->ExecuteCommandLists(1, (ID3D12CommandList* const*)cmd_list_[frame_index_].GetAddressOf());
+
     HRESULT_CHECK(swapchain_->Present(1, 0));
 
     // wait execution
     {
+        PIXBeginEvent(graphics_queue_.Get(), 0xFFFFFFFF, "sync after present");
         HRESULT_CHECK(graphics_queue_->Signal(graphics_fence_.Get(), graphics_fence_value_));
-        HRESULT_CHECK(compute_queue_->Signal(compute_fence_.Get(), compute_fence_value_));
+        // HRESULT_CHECK(compute_queue_->Signal(compute_fence_.Get(), compute_fence_value_));
 
         HRESULT_CHECK(graphics_fence_->SetEventOnCompletion(graphics_fence_value_, graphics_fence_event_));
-        HRESULT_CHECK(compute_fence_->SetEventOnCompletion(compute_fence_value_, compute_fence_event_));
+        // HRESULT_CHECK(compute_fence_->SetEventOnCompletion(compute_fence_value_, compute_fence_event_));
 
         if (graphics_fence_->GetCompletedValue() < graphics_fence_value_) {
             WaitForSingleObject(graphics_fence_event_, INFINITE);
         }
-        if (compute_fence_->GetCompletedValue() < compute_fence_value_) {
-            WaitForSingleObject(compute_fence_event_, INFINITE);
-        }
+        // if (compute_fence_->GetCompletedValue() < compute_fence_value_) {
+        //     WaitForSingleObject(compute_fence_event_, INFINITE);
+        // }
 
         ++graphics_fence_value_;
-        ++compute_fence_value_;
+        // ++compute_fence_value_;
+
+        PIXEndEvent(graphics_queue_.Get());
     }
 
     frame_index_ = swapchain_->GetCurrentBackBufferIndex();

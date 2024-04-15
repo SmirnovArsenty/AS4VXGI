@@ -5,6 +5,8 @@
 
 #include "headers/d3d12/directx/d3dx12.h"
 
+#include "headers/WinPixEventRuntime/pix3.h"
+
 #define HRESULT_CHECK(expr)                                                                                                                   \
     do {                                                                                                                                      \
         HRESULT status = expr;                                                                                                                \

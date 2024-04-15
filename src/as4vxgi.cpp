@@ -171,6 +171,7 @@ void AS4VXGI_Component::draw()
         {
             // stage 1
             stage_1_pipeline_->add_cmd()->Reset(graphics_command_list_allocator.Get(), stage_1_pipeline_->get_pso());
+            PIXBeginEvent(stage_1_pipeline_->add_cmd(), 0xFF00FFFF, "Voxels clear");
 
             stage_1_pipeline_->add_cmd()->SetComputeRootSignature(stage_1_pipeline_->get_root_signature());
             stage_1_pipeline_->add_cmd()->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
@@ -180,45 +181,51 @@ void AS4VXGI_Component::draw()
 
             stage_1_pipeline_->add_cmd()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(uav_voxels_resource_.Get()));
 
+            PIXEndEvent(stage_1_pipeline_->add_cmd());
             HRESULT_CHECK(stage_1_pipeline_->add_cmd()->Close());
         }
 
         // fill voxels grid params
         {
             // stage 2
-            // shader_voxels_fill_.use();
+            stage_2_pipeline_->add_cmd()->Reset(graphics_command_list_allocator.Get(), stage_2_pipeline_->get_pso());
+            PIXBeginEvent(stage_2_pipeline_->add_cmd(), 0xFF00FFFF, "Voxels fill");
+
+            stage_2_pipeline_->add_cmd()->SetComputeRootSignature(stage_2_pipeline_->get_root_signature());
+            stage_2_pipeline_->add_cmd()->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
+            stage_2_pipeline_->add_cmd()->SetComputeRootDescriptorTable(stage_2_pipeline_->resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
+
+            stage_2_pipeline_->add_cmd()->SetComputeRootDescriptorTable(stage_2_pipeline_->resource_index<VOXEL_DATA_BIND>(), voxel_data_cb_.gpu_descriptor_handle());
+            stage_2_pipeline_->add_cmd()->SetComputeRootDescriptorTable(stage_2_pipeline_->resource_index<VOXELS_BIND>(), uav_voxels_gpu_);
+
             for (int i = 0; i < mesh_trees_srv_.size(); ++i) {
                 for (int32_t j = 0; j < mesh_trees_srv_[i].size(); ++j) {
                     voxel_data_.voxelGrid.mesh_node_count = static_cast<int32_t>(mesh_trees_srv_[i][j]->size());
                     voxel_data_cb_.update(voxel_data_);
 
-                    stage_2_pipeline_->add_cmd()->Reset(graphics_command_list_allocator.Get(), stage_2_pipeline_->get_pso());
-
-                    stage_2_pipeline_->add_cmd()->SetComputeRootSignature(stage_2_pipeline_->get_root_signature());
-                    stage_2_pipeline_->add_cmd()->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
-                    stage_2_pipeline_->add_cmd()->SetComputeRootDescriptorTable(stage_2_pipeline_->resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
                     stage_2_pipeline_->add_cmd()->SetComputeRootDescriptorTable(stage_2_pipeline_->resource_index<MESH_TREE_BIND>(), mesh_trees_srv_[i][j]->gpu_descriptor_handle());
                     stage_2_pipeline_->add_cmd()->SetComputeRootDescriptorTable(stage_2_pipeline_->resource_index<INDICES_BIND>(), index_buffers_srv_[i][j]);
                     stage_2_pipeline_->add_cmd()->SetComputeRootDescriptorTable(stage_2_pipeline_->resource_index<VERTICES_BIND>(), vertex_buffers_srv_[i][j]);
                     stage_2_pipeline_->add_cmd()->SetComputeRootDescriptorTable(stage_2_pipeline_->resource_index<MODEL_MATRICES_BIND>(), model_matrix_srv_[i][j]->gpu_descriptor_handle());
 
-                    stage_2_pipeline_->add_cmd()->SetComputeRootDescriptorTable(stage_2_pipeline_->resource_index<VOXEL_DATA_BIND>(), voxel_data_cb_.gpu_descriptor_handle());
-                    stage_2_pipeline_->add_cmd()->SetComputeRootDescriptorTable(stage_2_pipeline_->resource_index<VOXELS_BIND>(), uav_voxels_gpu_);
-
                     stage_2_pipeline_->add_cmd()->Dispatch(align(voxel_grid_dim, 4) / 4,
                                                             align(voxel_grid_dim, 4) / 4,
                                                             align(voxel_grid_dim, 4) / 4);
 
-                    HRESULT_CHECK(stage_2_pipeline_->add_cmd()->Close());
+
                 }
             }
+            stage_2_pipeline_->add_cmd()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(uav_voxels_resource_.Get()));
+
+            PIXEndEvent(stage_2_pipeline_->add_cmd());
+            HRESULT_CHECK(stage_2_pipeline_->add_cmd()->Close());
         }
-        ID3D12CommandList* lists[] = {stage_1_pipeline_->add_cmd(), stage_2_pipeline_->add_cmd()};
-        graphics_queue->ExecuteCommandLists(_countof(lists), lists);
 
         // visualize voxel grid
         {
             stage_visualize_pipeline_->add_cmd()->Reset(graphics_command_list_allocator.Get(), stage_visualize_pipeline_->get_pso());
+            PIXBeginEvent(stage_visualize_pipeline_->add_cmd(), 0xFF00FFFF, "Voxels draw");
+
             stage_visualize_pipeline_->add_cmd()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
             stage_visualize_pipeline_->add_cmd()->RSSetViewports(1, &Game::inst()->render().viewport());
             stage_visualize_pipeline_->add_cmd()->RSSetScissorRects(1, &Game::inst()->render().scissor_rect());
@@ -232,10 +239,12 @@ void AS4VXGI_Component::draw()
 
             stage_visualize_pipeline_->add_cmd()->DrawInstanced(1, voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 0, 0);
 
+            PIXEndEvent(stage_visualize_pipeline_->add_cmd());
             HRESULT_CHECK(stage_visualize_pipeline_->add_cmd()->Close());
-            ID3D12CommandList* list = stage_visualize_pipeline_->add_cmd();
-            graphics_queue->ExecuteCommandLists(1, &list);
         }
+
+        ID3D12CommandList* lists[] = {stage_1_pipeline_->add_cmd(), stage_2_pipeline_->add_cmd(), stage_visualize_pipeline_->add_cmd()};
+        graphics_queue->ExecuteCommandLists(_countof(lists), lists);
     }
 
     for (ModelTree* model_tree : model_trees_) {
@@ -246,7 +255,7 @@ void AS4VXGI_Component::draw()
 void AS4VXGI_Component::imgui()
 {
 #ifndef NDEBUG
-    ImGuiViewport* main_viewport = ImGui::GetMainViewport();
+    // ImGuiViewport* main_viewport = ImGui::GetMainViewport();
 
     uint32_t window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse;
