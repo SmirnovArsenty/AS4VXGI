@@ -231,9 +231,9 @@ void ModelTree::Mesh::destroy()
 
 void ModelTree::Mesh::draw(GraphicsPipeline& cmd_list)
 {
-    cmd_list.add_cmd()->IASetIndexBuffer(&index_buffer_.view());
-    cmd_list.add_cmd()->IASetVertexBuffers(0, 1, &vertex_buffer_.view());
-    cmd_list.add_cmd()->DrawIndexedInstanced(index_count_, 1, 0, 0, 0);
+    cmd_list.cmd()->IASetIndexBuffer(&index_buffer_.view());
+    cmd_list.cmd()->IASetVertexBuffers(0, 1, &vertex_buffer_.view());
+    cmd_list.cmd()->DrawIndexedInstanced(index_count_, 1, 0, 0, 0);
 //     index_buffer_.bind();
 //     vertex_buffer_.bind(0U);
 //     material_.use();
@@ -244,7 +244,7 @@ void ModelTree::Mesh::draw(GraphicsPipeline& cmd_list)
 }
 
 #ifndef NDEBUG
-void ModelTree::Mesh::debug_draw(D3D12_GPU_DESCRIPTOR_HANDLE model_data_descriptor_handle)
+ID3D12CommandList* ModelTree::Mesh::debug_draw(D3D12_GPU_DESCRIPTOR_HANDLE model_data_descriptor_handle)
 {
     const auto render_target = Game::inst()->render().render_target();
     const auto depth_stencil_target = Game::inst()->render().depth_stencil();
@@ -252,32 +252,31 @@ void ModelTree::Mesh::debug_draw(D3D12_GPU_DESCRIPTOR_HANDLE model_data_descript
     const auto command_list_allocator = Game::inst()->render().graphics_command_allocator();
     const auto graphics_queue = Game::inst()->render().graphics_queue();
 
-    box_visualize_pipeline_.add_cmd()->Reset(command_list_allocator.Get(), box_visualize_pipeline_.get_pso());
-    PIXBeginEvent(box_visualize_pipeline_.add_cmd(), 0xFFFFFFFF, "Draw bound boxes");
+    box_visualize_pipeline_.cmd()->Reset(command_list_allocator.Get(), box_visualize_pipeline_.get_pso());
+    PIXBeginEvent(box_visualize_pipeline_.cmd(), PIX_COLOR(0x0, 0xFF, 0x0), "Draw bound boxes");
 
-    box_visualize_pipeline_.add_cmd()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    box_visualize_pipeline_.add_cmd()->RSSetViewports(1, &Game::inst()->render().viewport());
-    box_visualize_pipeline_.add_cmd()->RSSetScissorRects(1, &Game::inst()->render().scissor_rect());
-    box_visualize_pipeline_.add_cmd()->OMSetRenderTargets(1, &render_target, 1, &depth_stencil_target);
+    box_visualize_pipeline_.cmd()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    box_visualize_pipeline_.cmd()->RSSetViewports(1, &Game::inst()->render().viewport());
+    box_visualize_pipeline_.cmd()->RSSetScissorRects(1, &Game::inst()->render().scissor_rect());
+    box_visualize_pipeline_.cmd()->OMSetRenderTargets(1, &render_target, 1, &depth_stencil_target);
 
     // bind resources
-    box_visualize_pipeline_.add_cmd()->SetGraphicsRootSignature(box_visualize_pipeline_.get_root_signature());
-    box_visualize_pipeline_.add_cmd()->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
-    box_visualize_pipeline_.add_cmd()->SetGraphicsRootDescriptorTable(box_visualize_pipeline_.resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
-    box_visualize_pipeline_.add_cmd()->SetGraphicsRootDescriptorTable(box_visualize_pipeline_.resource_index<MODEL_DATA_BIND>(), model_data_descriptor_handle);
-    box_visualize_pipeline_.add_cmd()->SetGraphicsRootDescriptorTable(box_visualize_pipeline_.resource_index<BOX_TRANSFORM_BIND>(), box_transformations_srv_gpu_);
+    box_visualize_pipeline_.cmd()->SetGraphicsRootSignature(box_visualize_pipeline_.get_root_signature());
+    box_visualize_pipeline_.cmd()->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
+    box_visualize_pipeline_.cmd()->SetGraphicsRootDescriptorTable(box_visualize_pipeline_.resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
+    box_visualize_pipeline_.cmd()->SetGraphicsRootDescriptorTable(box_visualize_pipeline_.resource_index<MODEL_DATA_BIND>(), model_data_descriptor_handle);
+    box_visualize_pipeline_.cmd()->SetGraphicsRootDescriptorTable(box_visualize_pipeline_.resource_index<BOX_TRANSFORM_BIND>(), box_transformations_srv_gpu_);
 
-    box_visualize_pipeline_.add_cmd()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
-    box_visualize_pipeline_.add_cmd()->IASetIndexBuffer(&box_index_buffer_.view());
-    box_visualize_pipeline_.add_cmd()->IASetVertexBuffers(0, 1, &box_vertex_buffer_.view());
+    box_visualize_pipeline_.cmd()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+    box_visualize_pipeline_.cmd()->IASetIndexBuffer(&box_index_buffer_.view());
+    box_visualize_pipeline_.cmd()->IASetVertexBuffers(0, 1, &box_vertex_buffer_.view());
 
-    box_visualize_pipeline_.add_cmd()->DrawIndexedInstanced(24, (int32_t)std::size(mesh_tree_), 0, 0, 0);
+    box_visualize_pipeline_.cmd()->DrawIndexedInstanced(24, (int32_t)std::size(mesh_tree_), 0, 0, 0);
 
-    PIXEndEvent(box_visualize_pipeline_.add_cmd());
-    HRESULT_CHECK(box_visualize_pipeline_.add_cmd()->Close());
+    PIXEndEvent(box_visualize_pipeline_.cmd());
+    HRESULT_CHECK(box_visualize_pipeline_.cmd()->Close());
 
-    ID3D12CommandList* list = box_visualize_pipeline_.add_cmd();
-    graphics_queue->ExecuteCommandLists(1, &list);
+    return box_visualize_pipeline_.cmd();
 }
 #endif
 
@@ -361,49 +360,46 @@ void ModelTree::update()
 
 }
 
-void ModelTree::draw(Camera* camera)
+std::vector<ID3D12CommandList*> ModelTree::draw(Camera* camera)
 {
-    // auto context = Game::inst()->render().context();
-    // context->RSSetState(rasterizer_state_);
-    // 
-    // // albedo_shader_.use();
-    // normal_shader_.use();
-    // camera->bind();
+    std::vector<ID3D12CommandList*> cmd_lists;
+
     const auto render_target = Game::inst()->render().render_target();
     const auto depth_stencil_target = Game::inst()->render().depth_stencil();
     auto resource_descriptor_heap = Game::inst()->render().resource_descriptor_heap();
     const auto command_list_allocator = Game::inst()->render().graphics_command_allocator();
     const auto graphics_queue = Game::inst()->render().graphics_queue();
     {
-        graphics_pipeline_.add_cmd()->Reset(command_list_allocator.Get(), graphics_pipeline_.get_pso());
-        PIXBeginEvent(graphics_pipeline_.add_cmd(), 0xFFFFFFFF, "Draw model mesh");
+        graphics_pipeline_.cmd()->Reset(command_list_allocator.Get(), graphics_pipeline_.get_pso());
+        PIXBeginEvent(graphics_pipeline_.cmd(), PIX_COLOR(0x0, 0xFF, 0x0), "Draw model mesh");
 
-        graphics_pipeline_.add_cmd()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        graphics_pipeline_.add_cmd()->RSSetViewports(1, &Game::inst()->render().viewport());
-        graphics_pipeline_.add_cmd()->RSSetScissorRects(1, &Game::inst()->render().scissor_rect());
-        graphics_pipeline_.add_cmd()->OMSetRenderTargets(1, &render_target, 1, &depth_stencil_target);
+        graphics_pipeline_.cmd()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        graphics_pipeline_.cmd()->RSSetViewports(1, &Game::inst()->render().viewport());
+        graphics_pipeline_.cmd()->RSSetScissorRects(1, &Game::inst()->render().scissor_rect());
+        graphics_pipeline_.cmd()->OMSetRenderTargets(1, &render_target, 1, &depth_stencil_target);
 
         // bind resources
-        graphics_pipeline_.add_cmd()->SetGraphicsRootSignature(graphics_pipeline_.get_root_signature());
-        graphics_pipeline_.add_cmd()->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
-        graphics_pipeline_.add_cmd()->SetGraphicsRootDescriptorTable(graphics_pipeline_.resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
-        graphics_pipeline_.add_cmd()->SetGraphicsRootDescriptorTable(graphics_pipeline_.resource_index<MODEL_DATA_BIND>(), model_cb_.gpu_descriptor_handle());
+        graphics_pipeline_.cmd()->SetGraphicsRootSignature(graphics_pipeline_.get_root_signature());
+        graphics_pipeline_.cmd()->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
+        graphics_pipeline_.cmd()->SetGraphicsRootDescriptorTable(graphics_pipeline_.resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
+        graphics_pipeline_.cmd()->SetGraphicsRootDescriptorTable(graphics_pipeline_.resource_index<MODEL_DATA_BIND>(), model_cb_.gpu_descriptor_handle());
 
         for (Mesh* mesh : meshes_) {
             mesh->draw(graphics_pipeline_);
         }
-        PIXEndEvent(graphics_pipeline_.add_cmd());
-        HRESULT_CHECK(graphics_pipeline_.add_cmd()->Close());
+        PIXEndEvent(graphics_pipeline_.cmd());
+        HRESULT_CHECK(graphics_pipeline_.cmd()->Close());
 
-        ID3D12CommandList* list = graphics_pipeline_.add_cmd();
-        graphics_queue->ExecuteCommandLists(1, &list);
+        cmd_lists.push_back(graphics_pipeline_.cmd());
     }
 
-#ifndef NDEBUG
+#if !defined(NDEBUG)
     for (Mesh* mesh : meshes_) {
-        mesh->debug_draw(model_cb_.gpu_descriptor_handle());
+        cmd_lists.push_back(mesh->debug_draw(model_cb_.gpu_descriptor_handle()));
     }
 #endif
+
+    return cmd_lists;
 }
 
 std::vector<std::vector<uint32_t>> ModelTree::get_meshes_indices()

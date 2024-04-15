@@ -118,7 +118,7 @@ void Pipeline::declare_range(D3D12_DESCRIPTOR_RANGE_TYPE range_type, UINT slot, 
     descriptor_ranges_.back().Init(range_type, 1, slot, space, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
 }
 
-ID3D12GraphicsCommandList* Pipeline::add_cmd() const
+ID3D12GraphicsCommandList* Pipeline::cmd() const
 {
     return command_list_.Get();
 }
@@ -178,26 +178,26 @@ void GraphicsPipeline::setup_input_layout(const D3D12_INPUT_ELEMENT_DESC* inputE
 
 void GraphicsPipeline::attach_vertex_shader(const std::wstring& path, const std::vector<std::wstring>& defines)
 {
-    CompileShader(path, defines, L"VSMain", L"vs_6_0", IID_PPV_ARGS(vertex_shader_.ReleaseAndGetAddressOf()));
+    CompileShader(path, defines, L"VSMain", L"vs_6_0", IID_PPV_ARGS(vertex_shader_.GetAddressOf()));
 
     pso_desc_.VS = CD3DX12_SHADER_BYTECODE(vertex_shader_->GetBufferPointer(), vertex_shader_->GetBufferSize());
 }
 
 void GraphicsPipeline::attach_geometry_shader(const std::wstring& path, const std::vector<std::wstring>& defines)
 {
-    CompileShader(path, defines, L"GSMain", L"gs_6_0", IID_PPV_ARGS(geometry_shader_.ReleaseAndGetAddressOf()));
+    CompileShader(path, defines, L"GSMain", L"gs_6_0", IID_PPV_ARGS(geometry_shader_.GetAddressOf()));
 
     pso_desc_.GS = CD3DX12_SHADER_BYTECODE(geometry_shader_->GetBufferPointer(), geometry_shader_->GetBufferSize());
 }
 
 void GraphicsPipeline::attach_pixel_shader(const std::wstring& path, const std::vector<std::wstring>& defines)
 {
-    CompileShader(path, defines, L"PSMain", L"ps_6_0", IID_PPV_ARGS(pixel_shader_.ReleaseAndGetAddressOf()));
+    CompileShader(path, defines, L"PSMain", L"ps_6_0", IID_PPV_ARGS(pixel_shader_.GetAddressOf()));
 
     pso_desc_.PS = CD3DX12_SHADER_BYTECODE(pixel_shader_->GetBufferPointer(), pixel_shader_->GetBufferSize());
 }
 
-void GraphicsPipeline::create_command_list(D3D12_COMMAND_LIST_TYPE type)
+void GraphicsPipeline::create_command_list()
 {
     assert(command_list_.Get() == nullptr);
 
@@ -206,8 +206,8 @@ void GraphicsPipeline::create_command_list(D3D12_COMMAND_LIST_TYPE type)
 
     create_root_signature();
     pso_desc_.pRootSignature = root_signature_.Get();
-    HRESULT_CHECK(device->CreateGraphicsPipelineState(&pso_desc_, IID_PPV_ARGS(pso_.ReleaseAndGetAddressOf())));
-    HRESULT_CHECK(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator.Get(), pso_.Get(), IID_PPV_ARGS(command_list_.ReleaseAndGetAddressOf())));
+    HRESULT_CHECK(device->CreateGraphicsPipelineState(&pso_desc_, IID_PPV_ARGS(pso_.GetAddressOf())));
+    HRESULT_CHECK(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator.Get(), pso_.Get(), IID_PPV_ARGS(command_list_.GetAddressOf())));
     HRESULT_CHECK(command_list_->Close());
 }
 
@@ -229,29 +229,27 @@ ComputePipeline::~ComputePipeline()
 
 void ComputePipeline::attach_compute_shader(const std::wstring& path, const std::vector<std::wstring>& defines)
 {
-    CompileShader(path, defines, L"CSMain", L"cs_6_0", IID_PPV_ARGS(compute_shader_.ReleaseAndGetAddressOf()));
+    CompileShader(path, defines, L"CSMain", L"cs_6_0", IID_PPV_ARGS(compute_shader_.GetAddressOf()));
 
     pso_desc_.CS = CD3DX12_SHADER_BYTECODE(compute_shader_->GetBufferPointer(), compute_shader_->GetBufferSize());
 }
 
 void ComputePipeline::create_command_list()
 {
-    create_command_list(D3D12_COMMAND_LIST_TYPE_DIRECT);
+    create_command_list(D3D12_COMMAND_LIST_TYPE_DIRECT, Game::inst()->render().graphics_command_allocator().Get());
 }
 
-void ComputePipeline::create_command_list(D3D12_COMMAND_LIST_TYPE type)
+void ComputePipeline::create_command_list(D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* allocator)
 {
     assert(type == D3D12_COMMAND_LIST_TYPE_DIRECT || type == D3D12_COMMAND_LIST_TYPE_COMPUTE);
     assert(command_list_.Get() == nullptr);
 
     auto device = Game::inst()->render().device();
-    auto graphics_allocator = Game::inst()->render().graphics_command_allocator();
-    auto compute_allocator = Game::inst()->render().compute_command_allocator();
 
     create_root_signature();
     pso_desc_.pRootSignature = root_signature_.Get();
-    HRESULT_CHECK(device->CreateComputePipelineState(&pso_desc_, IID_PPV_ARGS(pso_.ReleaseAndGetAddressOf())));
-    HRESULT_CHECK(device->CreateCommandList(0, type, type == D3D12_COMMAND_LIST_TYPE_DIRECT ? graphics_allocator.Get() : compute_allocator.Get(), pso_.Get(), IID_PPV_ARGS(command_list_.ReleaseAndGetAddressOf())));
+    HRESULT_CHECK(device->CreateComputePipelineState(&pso_desc_, IID_PPV_ARGS(pso_.GetAddressOf())));
+    HRESULT_CHECK(device->CreateCommandList(0, type, allocator, pso_.Get(), IID_PPV_ARGS(command_list_.GetAddressOf())));
     HRESULT_CHECK(command_list_->Close());
 }
 

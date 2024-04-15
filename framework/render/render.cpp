@@ -105,10 +105,6 @@ void Render::create_command_queue()
     queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
     device_->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&graphics_queue_));
     graphics_queue_->SetName(L"Graphics queue");
-
-    queue_desc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
-    device_->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&compute_queue_));
-    compute_queue_->SetName(L"Compute queue");
 }
 
 void Render::create_swapchain()
@@ -214,9 +210,6 @@ void Render::create_command_allocator()
         HRESULT_CHECK(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(graphics_command_allocator_[i].ReleaseAndGetAddressOf())));
         graphics_command_allocator_[i]->SetName(L"Graphics command allocator");
         graphics_command_allocator_[i]->Reset();
-        HRESULT_CHECK(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(compute_command_allocator_[i].ReleaseAndGetAddressOf())));
-        compute_command_allocator_[i]->SetName(L"Compute command allocator");
-        compute_command_allocator_[i]->Reset();
     }
 }
 
@@ -247,14 +240,6 @@ void Render::create_fence()
     ++graphics_fence_value_;
     graphics_fence_event_ = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     if (graphics_fence_event_ == nullptr) {
-        assert(!GetLastError());
-    }
-
-    HRESULT_CHECK(device_->CreateFence(compute_fence_value_, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(compute_fence_.ReleaseAndGetAddressOf())));
-    compute_fence_->SetName(L"Compute fence");
-    ++compute_fence_value_;
-    compute_fence_event_ = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-    if (compute_fence_event_ == nullptr) {
         assert(!GetLastError());
     }
 }
@@ -301,7 +286,6 @@ void Render::create_cmd_list()
 void Render::destroy_command_queue()
 {
     SAFE_RELEASE(graphics_queue_);
-    SAFE_RELEASE(compute_queue_);
 }
 
 void Render::destroy_swapchain()
@@ -327,7 +311,6 @@ void Render::destroy_command_allocator()
 {
     for (int i = 0; i < swapchain_buffer_count_; ++i) {
         SAFE_RELEASE(graphics_command_allocator_[i]);
-        SAFE_RELEASE(compute_command_allocator_[i]);
     }
 }
 
@@ -342,10 +325,6 @@ void Render::destroy_fence()
     CloseHandle(graphics_fence_event_);
     graphics_fence_event_ = nullptr;
     SAFE_RELEASE(graphics_fence_);
-
-    CloseHandle(compute_fence_event_);
-    compute_fence_event_ = nullptr;
-    SAFE_RELEASE(compute_fence_);
 }
 
 void Render::term_imgui()
@@ -428,7 +407,7 @@ void Render::prepare_frame()
     HRESULT_CHECK(graphics_command_allocator()->Reset());
 
     HRESULT_CHECK(cmd_list_[frame_index_]->Reset(graphics_command_allocator().Get(), nullptr));
-    PIXBeginEvent(cmd_list_[frame_index_].Get(), 0xFFFFFFFF, "Prepare frame");
+    PIXBeginEvent(cmd_list_[frame_index_].Get(), PIX_COLOR(0xFF, 0xFF, 0xFF), "Prepare frame");
 
     cmd_list_[frame_index_]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(render_targets_[frame_index_].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
     cmd_list_[frame_index_]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(depth_stencil_[frame_index_].Get(),
@@ -463,7 +442,7 @@ void Render::end_imgui()
     ImGui::Render();
 
     imgui_graphics_command_list_[frame_index_]->Reset(graphics_command_allocator().Get(), nullptr);
-    PIXBeginEvent(imgui_graphics_command_list_[frame_index_].Get(), 0xFFFFFFFF, "ImGui");
+    PIXBeginEvent(imgui_graphics_command_list_[frame_index_].Get(), PIX_COLOR(0x80, 0x80, 0x80), "ImGui");
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap_->GetCPUDescriptorHandleForHeapStart(), frame_index_, rtv_descriptor_size_);
     imgui_graphics_command_list_[frame_index_]->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
@@ -479,7 +458,7 @@ void Render::end_imgui()
 void Render::present()
 {
     HRESULT_CHECK(cmd_list_[frame_index_]->Reset(graphics_command_allocator().Get(), nullptr));
-    PIXBeginEvent(cmd_list_[frame_index_].Get(), 0xFFFFFFFF, "render target transition to present");
+    PIXBeginEvent(cmd_list_[frame_index_].Get(), PIX_COLOR(0xFF, 0xFF, 0xFF), "render target transition to present");
     cmd_list_[frame_index_]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(render_targets_[frame_index_].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
     cmd_list_[frame_index_]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(depth_stencil_[frame_index_].Get(),
         D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_DEPTH_READ));
@@ -491,7 +470,7 @@ void Render::present()
 
     // wait execution
     {
-        PIXBeginEvent(graphics_queue_.Get(), 0xFFFFFFFF, "sync after present");
+        PIXBeginEvent(graphics_queue_.Get(), PIX_COLOR(0xFF, 0xFF, 0xFF), "sync after present");
         HRESULT_CHECK(graphics_queue_->Signal(graphics_fence_.Get(), graphics_fence_value_));
 
         HRESULT_CHECK(graphics_fence_->SetEventOnCompletion(graphics_fence_value_, graphics_fence_event_));
@@ -556,19 +535,9 @@ ComPtr<ID3D12CommandQueue> Render::graphics_queue() const
     return graphics_queue_;
 }
 
-ComPtr<ID3D12CommandQueue> Render::compute_queue() const
-{
-    return compute_queue_;
-}
-
 ComPtr<ID3D12CommandAllocator> Render::graphics_command_allocator() const
 {
     return graphics_command_allocator_[frame_index_];
-}
-
-ComPtr<ID3D12CommandAllocator> Render::compute_command_allocator() const
-{
-    return compute_command_allocator_[frame_index_];
 }
 
 ComPtr<ID3D12DescriptorHeap> Render::resource_descriptor_heap() const

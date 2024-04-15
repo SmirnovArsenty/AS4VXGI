@@ -61,7 +61,7 @@ public:
 
     virtual void create_command_list() = 0;
 
-    ID3D12GraphicsCommandList* add_cmd() const;
+    ID3D12GraphicsCommandList* cmd() const;
     ID3D12RootSignature* get_root_signature() const;
     ID3D12PipelineState* get_pso() const;
 };
@@ -106,5 +106,5 @@ public:
 
     void create_command_list() override;
 
-    void create_command_list(D3D12_COMMAND_LIST_TYPE type);
+    void create_command_list(D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* allocator);
 };

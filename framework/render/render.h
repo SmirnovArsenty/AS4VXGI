@@ -38,7 +38,6 @@ private:
 
     // create_command_queue
     ComPtr<ID3D12CommandQueue> graphics_queue_;
-    ComPtr<ID3D12CommandQueue> compute_queue_;
 
     // create_swapchain
     ComPtr<IDXGISwapChain3> swapchain_;
@@ -62,7 +61,6 @@ private:
 
     // create_command_allocator
     ComPtr<ID3D12CommandAllocator> graphics_command_allocator_[swapchain_buffer_count_];
-    ComPtr<ID3D12CommandAllocator> compute_command_allocator_[swapchain_buffer_count_];
 
     // create_descriptor_heap
     ComPtr<ID3D12DescriptorHeap> resource_descriptor_heap_;
@@ -75,10 +73,6 @@ private:
     HANDLE graphics_fence_event_;
     ComPtr<ID3D12Fence> graphics_fence_;
     UINT64 graphics_fence_value_{};
-
-    HANDLE compute_fence_event_;
-    ComPtr<ID3D12Fence> compute_fence_;
-    UINT64 compute_fence_value_{};
 
     // defaults
     CD3DX12_VIEWPORT viewport_;
@@ -136,10 +130,8 @@ public:
     ComPtr<ID3D12Device> device() const;
 
     ComPtr<ID3D12CommandQueue> graphics_queue() const;
-    ComPtr<ID3D12CommandQueue> compute_queue() const;
 
     ComPtr<ID3D12CommandAllocator> graphics_command_allocator() const;
-    ComPtr<ID3D12CommandAllocator> compute_command_allocator() const;
 
     ComPtr<ID3D12DescriptorHeap> resource_descriptor_heap() const;
     ComPtr<ID3D12DescriptorHeap> sampler_descriptor_heap() const;
