@@ -18,10 +18,9 @@
         }                                                                                                                                     \
     } while(0, 0)
 
-#define SAFE_RELEASE(ptr)       \
-    do {                        \
-        if (ptr != nullptr) {   \
-            (ptr)->Release();   \
-        }                       \
-        ptr = nullptr;          \
+#define SAFE_RELEASE(com_ptr)     \
+    do {                          \
+        if (com_ptr != nullptr) { \
+            com_ptr = nullptr;    \
+        }                         \
     } while (0, 0)

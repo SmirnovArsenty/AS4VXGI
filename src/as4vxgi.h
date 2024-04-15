@@ -11,7 +11,7 @@ class AS4VXGI_Component final : public GameComponent
 {
 public:
     AS4VXGI_Component() = default;
-    virtual ~AS4VXGI_Component() = default;
+    ~AS4VXGI_Component() override = default;
 
     void initialize() override;
     void draw() override;
@@ -45,8 +45,6 @@ private:
     std::vector<std::vector<D3D12_GPU_DESCRIPTOR_HANDLE>> vertex_buffers_srv_;
     std::vector<std::vector<ShaderResource<Matrix>*>> model_matrix_srv_;
 // #ifndef NDEBUG
-    ComPtr<ID3D12Fence> fence_ = nullptr;
-    uint64_t fence_value_ = 0;
     GraphicsPipeline* stage_visualize_pipeline_ = nullptr;
 // #endif
 };

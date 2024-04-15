@@ -65,7 +65,7 @@ void Render::initialize()
     device_->QueryInterface(IID_PPV_ARGS(info_queue_.GetAddressOf()));
 
     HRESULT_CHECK(info_queue_->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true));
-    HRESULT_CHECK(info_queue_->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true));
+    HRESULT_CHECK(info_queue_->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, false));
 
     D3D12_MESSAGE_SEVERITY muted_severities[] = { D3D12_MESSAGE_SEVERITY_INFO };
     //D3D12_MESSAGE_ID muted_ids[] = {
@@ -310,58 +310,58 @@ void Render::create_cmd_list()
 
 void Render::destroy_command_queue()
 {
-    graphics_queue_.Reset();
-    compute_queue_.Reset();
+    SAFE_RELEASE(graphics_queue_);
+    SAFE_RELEASE(compute_queue_);
 }
 
 void Render::destroy_swapchain()
 {
-    swapchain_.Reset();
+    SAFE_RELEASE(swapchain_);
 }
 
 void Render::destroy_rtv_descriptor_heap()
 {
-    dsv_heap_.Reset();
-    gbuffer_heap_.Reset();
-    rtv_heap_.Reset();
+    SAFE_RELEASE(dsv_heap_);
+    SAFE_RELEASE(gbuffer_heap_);
+    SAFE_RELEASE(rtv_heap_);
 }
 
 void Render::destroy_render_target_views()
 {
     for (int i = 0; i < swapchain_buffer_count_; ++i) {
-        render_targets_[i].Reset();
+        SAFE_RELEASE(render_targets_[i]);
     }
 }
 
 void Render::destroy_command_allocator()
 {
     for (int i = 0; i < swapchain_buffer_count_; ++i) {
-        graphics_command_allocator_[i].Reset();
-        compute_command_allocator_[i].Reset();
+        SAFE_RELEASE(graphics_command_allocator_[i]);
+        SAFE_RELEASE(compute_command_allocator_[i]);
     }
 }
 
 void Render::destroy_descriptor_heap()
 {
-    sampler_descriptor_heap_.Reset();
-    resource_descriptor_heap_.Reset();
+    SAFE_RELEASE(sampler_descriptor_heap_);
+    SAFE_RELEASE(resource_descriptor_heap_);
 }
 
 void Render::destroy_fence()
 {
     CloseHandle(graphics_fence_event_);
     graphics_fence_event_ = nullptr;
-    graphics_fence_.Reset();
+    SAFE_RELEASE(graphics_fence_);
 
     CloseHandle(compute_fence_event_);
     compute_fence_event_ = nullptr;
-    compute_fence_.Reset();
+    SAFE_RELEASE(compute_fence_);
 }
 
 void Render::term_imgui()
 {
     for (int i = 0; i < swapchain_buffer_count_; ++i) {
-        imgui_graphics_command_list_[i].Reset();
+        SAFE_RELEASE(imgui_graphics_command_list_[i]);
     }
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();
@@ -371,7 +371,7 @@ void Render::term_imgui()
 void Render::destroy_cmd_list()
 {
     for (int i = 0; i < swapchain_buffer_count_; ++i) {
-        cmd_list_[i].Reset();
+        SAFE_RELEASE(cmd_list_[i]);
     }
 }
 
@@ -545,17 +545,17 @@ void Render::destroy_resources()
     destroy_command_queue();
 
 #if !defined(NDEBUG)
-    info_queue_.Reset();
+    SAFE_RELEASE(info_queue_);
 #endif
 
-    device_.Reset();
-    factory_.Reset();
+    SAFE_RELEASE(device_);
+    SAFE_RELEASE(factory_);
 
 #if !defined(NDEBUG)
-    d3d_debug_controller_.Reset();
+    SAFE_RELEASE(d3d_debug_controller_);
 
     dxgi_debug_controller_->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_SUMMARY);
-    dxgi_debug_controller_.Reset();
+    SAFE_RELEASE(dxgi_debug_controller_);
 #endif
 }
 
@@ -564,37 +564,37 @@ Camera* Render::camera() const
     return camera_;
 }
 
-const ComPtr<ID3D12Device>& Render::device() const
+ComPtr<ID3D12Device> Render::device() const
 {
     return device_;
 }
 
-const ComPtr<ID3D12CommandQueue>& Render::graphics_queue() const
+ComPtr<ID3D12CommandQueue> Render::graphics_queue() const
 {
     return graphics_queue_;
 }
 
-const ComPtr<ID3D12CommandQueue>& Render::compute_queue() const
+ComPtr<ID3D12CommandQueue> Render::compute_queue() const
 {
     return compute_queue_;
 }
 
-const ComPtr<ID3D12CommandAllocator>& Render::graphics_command_allocator() const
+ComPtr<ID3D12CommandAllocator> Render::graphics_command_allocator() const
 {
     return graphics_command_allocator_[frame_index_];
 }
 
-const ComPtr<ID3D12CommandAllocator>& Render::compute_command_allocator() const
+ComPtr<ID3D12CommandAllocator> Render::compute_command_allocator() const
 {
     return compute_command_allocator_[frame_index_];
 }
 
-const ComPtr<ID3D12DescriptorHeap>& Render::resource_descriptor_heap() const
+ComPtr<ID3D12DescriptorHeap> Render::resource_descriptor_heap() const
 {
     return resource_descriptor_heap_;
 }
 
-const ComPtr<ID3D12DescriptorHeap>& Render::sampler_descriptor_heap() const
+ComPtr<ID3D12DescriptorHeap> Render::sampler_descriptor_heap() const
 {
     return sampler_descriptor_heap_;
 }

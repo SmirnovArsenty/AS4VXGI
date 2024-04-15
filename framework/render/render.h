@@ -133,16 +133,16 @@ public:
 
     Camera* camera() const;
 
-    const ComPtr<ID3D12Device>& device() const;
+    ComPtr<ID3D12Device> device() const;
 
-    const ComPtr<ID3D12CommandQueue>& graphics_queue() const;
-    const ComPtr<ID3D12CommandQueue>& compute_queue() const;
+    ComPtr<ID3D12CommandQueue> graphics_queue() const;
+    ComPtr<ID3D12CommandQueue> compute_queue() const;
 
-    const ComPtr<ID3D12CommandAllocator>& graphics_command_allocator() const;
-    const ComPtr<ID3D12CommandAllocator>& compute_command_allocator() const;
+    ComPtr<ID3D12CommandAllocator> graphics_command_allocator() const;
+    ComPtr<ID3D12CommandAllocator> compute_command_allocator() const;
 
-    const ComPtr<ID3D12DescriptorHeap>& resource_descriptor_heap() const;
-    const ComPtr<ID3D12DescriptorHeap>& sampler_descriptor_heap() const;
+    ComPtr<ID3D12DescriptorHeap> resource_descriptor_heap() const;
+    ComPtr<ID3D12DescriptorHeap> sampler_descriptor_heap() const;
 
     D3D12_CPU_DESCRIPTOR_HANDLE render_target() const;
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> gbuffer_render_targets() const;

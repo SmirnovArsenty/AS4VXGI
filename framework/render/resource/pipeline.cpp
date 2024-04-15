@@ -34,7 +34,7 @@ void CompileShader(std::wstring path, const std::vector<std::wstring>& defines, 
     }
 
     ComPtr<IDxcBlobEncoding> source;
-    utils->LoadFile(path.c_str(), nullptr, &source);
+    utils->LoadFile(path.c_str(), nullptr, source.GetAddressOf());
     DxcBuffer source_buffer;
     source_buffer.Ptr = source->GetBufferPointer();
     source_buffer.Size = source->GetBufferSize();
@@ -46,12 +46,15 @@ void CompileShader(std::wstring path, const std::vector<std::wstring>& defines, 
     utils->CreateDefaultIncludeHandler(include_handler.GetAddressOf());
 
     compiler->Compile(&source_buffer, args.data(), static_cast<UINT32>(args.size()), include_handler.Get(), IID_PPV_ARGS(&result));
+    include_handler = nullptr;
+    source = nullptr;
 
     ComPtr<IDxcBlobUtf8> error;
     result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&error), nullptr);
     if (error != nullptr && error->GetStringLength() != 0) {
         OutputDebugString(error->GetStringPointer());
     }
+    error = nullptr;
 
     HRESULT hres;
     result->GetStatus(&hres);
@@ -62,9 +65,22 @@ void CompileShader(std::wstring path, const std::vector<std::wstring>& defines, 
 
     ComPtr<IDxcBlobUtf16> shader_name;
     result->GetOutput(DXC_OUT_OBJECT, iid, ppvObject, &shader_name);
+    shader_name = nullptr;
+
+    utils = nullptr;
+    compiler = nullptr;
 }
 
 #pragma region ================================================================================================Pipeline================================================================================================
+
+Pipeline::~Pipeline()
+{
+    SAFE_RELEASE(command_list_);
+    SAFE_RELEASE(root_signature_);
+    SAFE_RELEASE(pso_);
+
+    descriptor_ranges_.clear();
+}
 
 void Pipeline::create_root_signature()
 {
@@ -138,16 +154,11 @@ GraphicsPipeline::GraphicsPipeline()
 
 GraphicsPipeline::~GraphicsPipeline()
 {
-    command_list_.Reset();
-    pso_.Reset();
+    SAFE_RELEASE(pixel_shader_);
+    SAFE_RELEASE(vertex_shader_);
+    SAFE_RELEASE(geometry_shader_);
 
-    pixel_shader_.Reset();
-    vertex_shader_.Reset();
-    geometry_shader_.Reset();
-
-    vertex_buffer_.Reset();
-
-    root_signature_.Reset();
+    SAFE_RELEASE(vertex_buffer_);
 }
 
 void GraphicsPipeline::setup_depth_stencil_state(D3D12_DEPTH_STENCIL_DESC state)
@@ -190,8 +201,8 @@ void GraphicsPipeline::create_command_list()
 {
     assert(command_list_.Get() == nullptr);
 
-    auto& device = Game::inst()->render().device();
-    auto& allocator = Game::inst()->render().graphics_command_allocator();
+    auto device = Game::inst()->render().device();
+    auto allocator = Game::inst()->render().graphics_command_allocator();
 
     create_root_signature();
     pso_desc_.pRootSignature = root_signature_.Get();
@@ -213,12 +224,7 @@ ComputePipeline::ComputePipeline()
 
 ComputePipeline::~ComputePipeline()
 {
-    command_list_.Reset();
-    pso_.Reset();
-
-    compute_shader_.Reset();
-
-    root_signature_.Reset();
+    SAFE_RELEASE(compute_shader_);
 }
 
 void ComputePipeline::attach_compute_shader(const std::wstring& path, const std::vector<std::wstring>& defines)
@@ -232,14 +238,13 @@ void ComputePipeline::create_command_list()
 {
     assert(command_list_.Get() == nullptr);
 
-    auto& device = Game::inst()->render().device();
-    auto& compute_queue = Game::inst()->render().compute_queue();
-    auto& allocator = Game::inst()->render().compute_command_allocator();
+    auto device = Game::inst()->render().device();
+    auto allocator = Game::inst()->render().graphics_command_allocator();
 
     create_root_signature();
     pso_desc_.pRootSignature = root_signature_.Get();
     HRESULT_CHECK(device->CreateComputePipelineState(&pso_desc_, IID_PPV_ARGS(pso_.ReleaseAndGetAddressOf())));
-    HRESULT_CHECK(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, allocator.Get(), pso_.Get(), IID_PPV_ARGS(command_list_.ReleaseAndGetAddressOf())));
+    HRESULT_CHECK(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator.Get(), pso_.Get(), IID_PPV_ARGS(command_list_.ReleaseAndGetAddressOf())));
     HRESULT_CHECK(command_list_->Close());
 }
 

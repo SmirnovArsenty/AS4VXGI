@@ -59,7 +59,7 @@ private:
 
         void draw(GraphicsPipeline& cmd_list);
 #ifndef NDEBUG
-        void debug_draw(GraphicsPipeline& cmd_list);
+        void debug_draw();
 #endif
 
         D3D12_GPU_DESCRIPTOR_HANDLE& get_index_buffer_srv() { return index_buffer_srv_gpu_; }

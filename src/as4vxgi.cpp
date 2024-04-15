@@ -20,28 +20,30 @@ void AS4VXGI_Component::initialize()
 {
     Game::inst()->render().camera()->set_camera(Vector3(5, 0, 0), Vector3(-1, 0, 0));
 
-    constexpr uint32_t offset = 300;
-    constexpr uint32_t count = 10;
-    //for (int x = 0; x < count; ++x) {
-    //    for (int y = 0; y < count; ++y) {
-    //        model_trees_.push_back(new ModelTree{});
-    //        model_trees_.back()->load("./resources/models/suzanne.fbx", Vector3((x) * offset, 0, (y) * offset));
-    //    }
-    //}
+    // constexpr uint32_t offset = 300;
+    // constexpr uint32_t count = 10;
+    // for (int x = 0; x < count; ++x) {
+    //     for (int y = 0; y < count; ++y) {
+    //         model_trees_.push_back(new ModelTree{});
+    //         model_trees_.back()->load("./resources/models/suzanne.fbx", Vector3((x - count / 2) * offset, 0, (y - count / 2) * offset));
+    //     }
+    // }
+
     model_trees_.push_back(new ModelTree{});
     model_trees_.back()->load("./resources/models/suzanne.fbx");//, Vector3(0, 0, 150));
+
     //model_trees_.push_back(new ModelTree{});
     //model_trees_.back()->load("./resources/models/suzanne.fbx", Vector3(0, 0, -150));
     //model_trees_.push_back(new ModelTree{});
     //model_trees_.back()->load("./resources/models/terrain.fbx");
     //model.load("./resources/models/sponza/source/sponza.fbx");
 
-    auto& device = Game::inst()->render().device();
+    auto device = Game::inst()->render().device();
 
     {
         // create command lists
 
-        if (1)
+        if (true)
         {
             stage_1_pipeline_ = new ComputePipeline();
             stage_1_pipeline_->attach_compute_shader(L"./resources/shaders/voxels/clear.hlsl", {});
@@ -51,7 +53,7 @@ void AS4VXGI_Component::initialize()
 
             stage_1_pipeline_->create_command_list();
         }
-        if (1)
+        if (true)
         {
             stage_2_pipeline_ = new ComputePipeline();
             stage_2_pipeline_->attach_compute_shader(L"./resources/shaders/voxels/fill.hlsl", {});
@@ -69,7 +71,7 @@ void AS4VXGI_Component::initialize()
 
             stage_2_pipeline_->create_command_list();
         }
-        if (1)
+        if (true)
         {
             stage_visualize_pipeline_ = new GraphicsPipeline();
             D3D12_INPUT_ELEMENT_DESC inputs[] =
@@ -96,8 +98,6 @@ void AS4VXGI_Component::initialize()
             stage_visualize_pipeline_->setup_primitive_topology_type(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
 
             stage_visualize_pipeline_->create_command_list();
-
-            device->CreateFence(fence_value_, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(fence_.ReleaseAndGetAddressOf()));
         }
     }
 
@@ -160,19 +160,17 @@ void AS4VXGI_Component::initialize()
 
 void AS4VXGI_Component::draw()
 {
-    auto& graphics_command_list_allocator = Game::inst()->render().graphics_command_allocator();
-    auto& compute_command_list_allocator = Game::inst()->render().compute_command_allocator();
-    auto& resource_descriptor_heap = Game::inst()->render().resource_descriptor_heap();
-    auto render_target = Game::inst()->render().render_target();
-    auto depth_stencil_target = Game::inst()->render().depth_stencil();
-    auto& graphics_queue = Game::inst()->render().graphics_queue();
-    auto& compute_queue = Game::inst()->render().compute_queue();
-    if (1)
+    auto graphics_command_list_allocator = Game::inst()->render().graphics_command_allocator();
+    auto resource_descriptor_heap = Game::inst()->render().resource_descriptor_heap();
+    const auto render_target = Game::inst()->render().render_target();
+    const auto depth_stencil_target = Game::inst()->render().depth_stencil();
+    auto graphics_queue = Game::inst()->render().graphics_queue();
+    if (true)
     {
         // clear voxel grid
         {
             // stage 1
-            stage_1_pipeline_->add_cmd()->Reset(compute_command_list_allocator.Get(), stage_1_pipeline_->get_pso());
+            stage_1_pipeline_->add_cmd()->Reset(graphics_command_list_allocator.Get(), stage_1_pipeline_->get_pso());
 
             stage_1_pipeline_->add_cmd()->SetComputeRootSignature(stage_1_pipeline_->get_root_signature());
             stage_1_pipeline_->add_cmd()->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
@@ -180,9 +178,9 @@ void AS4VXGI_Component::draw()
 
             stage_1_pipeline_->add_cmd()->Dispatch(align(voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 256) / 256, 1, 1);
 
-            stage_1_pipeline_->add_cmd()->Close();
-            ID3D12CommandList* list = stage_1_pipeline_->add_cmd();
-            compute_queue->ExecuteCommandLists(1, &list);
+            stage_1_pipeline_->add_cmd()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(uav_voxels_resource_.Get()));
+
+            HRESULT_CHECK(stage_1_pipeline_->add_cmd()->Close());
         }
 
         // fill voxels grid params
@@ -194,7 +192,7 @@ void AS4VXGI_Component::draw()
                     voxel_data_.voxelGrid.mesh_node_count = static_cast<int32_t>(mesh_trees_srv_[i][j]->size());
                     voxel_data_cb_.update(voxel_data_);
 
-                    stage_2_pipeline_->add_cmd()->Reset(compute_command_list_allocator.Get(), stage_2_pipeline_->get_pso());
+                    stage_2_pipeline_->add_cmd()->Reset(graphics_command_list_allocator.Get(), stage_2_pipeline_->get_pso());
 
                     stage_2_pipeline_->add_cmd()->SetComputeRootSignature(stage_2_pipeline_->get_root_signature());
                     stage_2_pipeline_->add_cmd()->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
@@ -211,42 +209,32 @@ void AS4VXGI_Component::draw()
                                                             align(voxel_grid_dim, 4) / 4,
                                                             align(voxel_grid_dim, 4) / 4);
 
-                    stage_2_pipeline_->add_cmd()->Close();
-                    ID3D12CommandList* list = stage_2_pipeline_->add_cmd();
-                    compute_queue->ExecuteCommandLists(1, &list);
+                    HRESULT_CHECK(stage_2_pipeline_->add_cmd()->Close());
                 }
             }
+        }
+        ID3D12CommandList* lists[] = {stage_1_pipeline_->add_cmd(), stage_2_pipeline_->add_cmd()};
+        graphics_queue->ExecuteCommandLists(_countof(lists), lists);
 
-            // visualize voxel grid
-            {
-                // wait for compute queue to complete
-                // TODO: set barrier
-                HANDLE event = CreateEventEx(nullptr, FALSE, FALSE, EVENT_ALL_ACCESS);
-                fence_->SetEventOnCompletion(++fence_value_, event);
-                HRESULT_CHECK(compute_queue->Signal(fence_.Get(), fence_value_));
-                while (fence_->GetCompletedValue() < fence_value_) {
-                    WaitForSingleObject(event, INFINITE);
-                }
-                CloseHandle(event);
+        // visualize voxel grid
+        {
+            stage_visualize_pipeline_->add_cmd()->Reset(graphics_command_list_allocator.Get(), stage_visualize_pipeline_->get_pso());
+            stage_visualize_pipeline_->add_cmd()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
+            stage_visualize_pipeline_->add_cmd()->RSSetViewports(1, &Game::inst()->render().viewport());
+            stage_visualize_pipeline_->add_cmd()->RSSetScissorRects(1, &Game::inst()->render().scissor_rect());
+            stage_visualize_pipeline_->add_cmd()->OMSetRenderTargets(1, &render_target, 1, &depth_stencil_target);
 
-                stage_visualize_pipeline_->add_cmd()->Reset(graphics_command_list_allocator.Get(), stage_visualize_pipeline_->get_pso());
-                stage_visualize_pipeline_->add_cmd()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
-                stage_visualize_pipeline_->add_cmd()->RSSetViewports(1, &Game::inst()->render().viewport());
-                stage_visualize_pipeline_->add_cmd()->RSSetScissorRects(1, &Game::inst()->render().scissor_rect());
-                stage_visualize_pipeline_->add_cmd()->OMSetRenderTargets(1, &render_target, 1, &depth_stencil_target);
+            stage_visualize_pipeline_->add_cmd()->SetGraphicsRootSignature(stage_visualize_pipeline_->get_root_signature());
+            stage_visualize_pipeline_->add_cmd()->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
+            stage_visualize_pipeline_->add_cmd()->SetGraphicsRootDescriptorTable(stage_visualize_pipeline_->resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
+            stage_visualize_pipeline_->add_cmd()->SetGraphicsRootDescriptorTable(stage_visualize_pipeline_->resource_index<VOXELS_BIND>(), uav_voxels_gpu_);
+            stage_visualize_pipeline_->add_cmd()->SetGraphicsRootDescriptorTable(stage_visualize_pipeline_->resource_index<VOXEL_DATA_BIND>(), voxel_data_cb_.gpu_descriptor_handle());
 
-                stage_visualize_pipeline_->add_cmd()->SetGraphicsRootSignature(stage_visualize_pipeline_->get_root_signature());
-                stage_visualize_pipeline_->add_cmd()->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
-                stage_visualize_pipeline_->add_cmd()->SetGraphicsRootDescriptorTable(stage_visualize_pipeline_->resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
-                stage_visualize_pipeline_->add_cmd()->SetGraphicsRootDescriptorTable(stage_visualize_pipeline_->resource_index<VOXELS_BIND>(), uav_voxels_gpu_);
-                stage_visualize_pipeline_->add_cmd()->SetGraphicsRootDescriptorTable(stage_visualize_pipeline_->resource_index<VOXEL_DATA_BIND>(), voxel_data_cb_.gpu_descriptor_handle());
+            stage_visualize_pipeline_->add_cmd()->DrawInstanced(1, voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 0, 0);
 
-                stage_visualize_pipeline_->add_cmd()->DrawInstanced(1, voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 0, 0);
-
-                stage_visualize_pipeline_->add_cmd()->Close();
-                ID3D12CommandList* list = stage_visualize_pipeline_->add_cmd();
-                graphics_queue->ExecuteCommandLists(1, &list);
-            }
+            HRESULT_CHECK(stage_visualize_pipeline_->add_cmd()->Close());
+            ID3D12CommandList* list = stage_visualize_pipeline_->add_cmd();
+            graphics_queue->ExecuteCommandLists(1, &list);
         }
     }
 
@@ -273,7 +261,7 @@ void AS4VXGI_Component::imgui()
         ImGui::SameLine();
         ImGui::InputFloat("##local_voxel_grid_size", &local_voxel_grid_size, 0.01f, 1.f);
 
-        ImGui::Text("Voxel grid dimentions");
+        ImGui::Text("Voxel grid dimensions");
         ImGui::SameLine();
         ImGui::InputInt("##local_voxel_grid_dim", &local_voxel_grid_dim, 1, 10);
     }
@@ -281,14 +269,13 @@ void AS4VXGI_Component::imgui()
 
     if (local_voxel_grid_dim > 0 && local_voxel_grid_size > 0) {
         if (local_voxel_grid_dim != voxel_grid_dim) {
-            uav_voxels_resource_.Reset();
             UINT voxels_uav_size = local_voxel_grid_dim * local_voxel_grid_dim * local_voxel_grid_dim * sizeof(Voxel);
-            auto& device = Game::inst()->render().device();
+            auto device = Game::inst()->render().device();
 
             HRESULT_CHECK(device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
                 D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(voxels_uav_size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
                 D3D12_RESOURCE_STATE_COMMON, nullptr,
-                IID_PPV_ARGS(uav_voxels_resource_.GetAddressOf())));
+                IID_PPV_ARGS(uav_voxels_resource_.ReleaseAndGetAddressOf())));
 
             D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
             uav_desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
@@ -334,6 +321,7 @@ void AS4VXGI_Component::destroy_resources()
 
     delete stage_1_pipeline_;
     stage_1_pipeline_ = nullptr;
+
     model_matrix_srv_.clear();
     mesh_trees_srv_.clear();
 
@@ -343,5 +331,6 @@ void AS4VXGI_Component::destroy_resources()
     }
 
     model_trees_.clear();
-}
 
+    SAFE_RELEASE(uav_voxels_resource_);
+}

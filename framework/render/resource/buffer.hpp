@@ -31,11 +31,13 @@ public:
             resource_->Unmap(0, &range);
             mapped_ptr_ = nullptr;
         }
+
+        SAFE_RELEASE(resource_);
     }
 
     void initialize()
     {
-        auto& device = Game::inst()->render().device();
+        auto device = Game::inst()->render().device();
 
         HRESULT_CHECK(device->CreateCommittedResource(
             &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
@@ -85,13 +87,16 @@ private:
     UINT size_;
 public:
     ShaderResource() = default;
-    ~ShaderResource() = default;
+    ~ShaderResource()
+    {
+        SAFE_RELEASE(resource_);
+    }
 
     void initialize(T* data, UINT size)
     {
         size_ = size;
 
-        auto& device = Game::inst()->render().device();
+        auto device = Game::inst()->render().device();
 
         HRESULT_CHECK(device->CreateCommittedResource(
             &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
@@ -154,11 +159,13 @@ public:
             resource_->Unmap(0, &range);
             mapped_ptr_ = nullptr;
         }
+
+        SAFE_RELEASE(resource_);
     }
 
     void initialize(const std::vector<UINT32>& indices)
     {
-        auto& device = Game::inst()->render().device();
+        auto device = Game::inst()->render().device();
 
         HRESULT_CHECK(device->CreateCommittedResource(
             &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
@@ -207,11 +214,13 @@ public:
             resource_->Unmap(0, &range);
             mapped_ptr_ = nullptr;
         }
+
+        SAFE_RELEASE(resource_);
     }
 
     void initialize(const std::vector<V>& vertices)
     {
-        auto& device = Game::inst()->render().device();
+        auto device = Game::inst()->render().device();
 
         HRESULT_CHECK(device->CreateCommittedResource(
             &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
