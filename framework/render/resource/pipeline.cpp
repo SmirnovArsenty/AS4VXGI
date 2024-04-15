@@ -197,7 +197,7 @@ void GraphicsPipeline::attach_pixel_shader(const std::wstring& path, const std::
     pso_desc_.PS = CD3DX12_SHADER_BYTECODE(pixel_shader_->GetBufferPointer(), pixel_shader_->GetBufferSize());
 }
 
-void GraphicsPipeline::create_command_list()
+void GraphicsPipeline::create_command_list(D3D12_COMMAND_LIST_TYPE type)
 {
     assert(command_list_.Get() == nullptr);
 
@@ -236,15 +236,22 @@ void ComputePipeline::attach_compute_shader(const std::wstring& path, const std:
 
 void ComputePipeline::create_command_list()
 {
+    create_command_list(D3D12_COMMAND_LIST_TYPE_DIRECT);
+}
+
+void ComputePipeline::create_command_list(D3D12_COMMAND_LIST_TYPE type)
+{
+    assert(type == D3D12_COMMAND_LIST_TYPE_DIRECT || type == D3D12_COMMAND_LIST_TYPE_COMPUTE);
     assert(command_list_.Get() == nullptr);
 
     auto device = Game::inst()->render().device();
-    auto allocator = Game::inst()->render().graphics_command_allocator();
+    auto graphics_allocator = Game::inst()->render().graphics_command_allocator();
+    auto compute_allocator = Game::inst()->render().compute_command_allocator();
 
     create_root_signature();
     pso_desc_.pRootSignature = root_signature_.Get();
     HRESULT_CHECK(device->CreateComputePipelineState(&pso_desc_, IID_PPV_ARGS(pso_.ReleaseAndGetAddressOf())));
-    HRESULT_CHECK(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator.Get(), pso_.Get(), IID_PPV_ARGS(command_list_.ReleaseAndGetAddressOf())));
+    HRESULT_CHECK(device->CreateCommandList(0, type, type == D3D12_COMMAND_LIST_TYPE_DIRECT ? graphics_allocator.Get() : compute_allocator.Get(), pso_.Get(), IID_PPV_ARGS(command_list_.ReleaseAndGetAddressOf())));
     HRESULT_CHECK(command_list_->Close());
 }
 

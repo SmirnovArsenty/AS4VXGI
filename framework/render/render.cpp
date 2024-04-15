@@ -426,7 +426,6 @@ void Render::prepare_frame()
 
     // reset command allocators
     HRESULT_CHECK(graphics_command_allocator()->Reset());
-    HRESULT_CHECK(compute_command_allocator()->Reset());
 
     HRESULT_CHECK(cmd_list_[frame_index_]->Reset(graphics_command_allocator().Get(), nullptr));
     PIXBeginEvent(cmd_list_[frame_index_].Get(), 0xFFFFFFFF, "Prepare frame");
@@ -494,20 +493,14 @@ void Render::present()
     {
         PIXBeginEvent(graphics_queue_.Get(), 0xFFFFFFFF, "sync after present");
         HRESULT_CHECK(graphics_queue_->Signal(graphics_fence_.Get(), graphics_fence_value_));
-        // HRESULT_CHECK(compute_queue_->Signal(compute_fence_.Get(), compute_fence_value_));
 
         HRESULT_CHECK(graphics_fence_->SetEventOnCompletion(graphics_fence_value_, graphics_fence_event_));
-        // HRESULT_CHECK(compute_fence_->SetEventOnCompletion(compute_fence_value_, compute_fence_event_));
 
         if (graphics_fence_->GetCompletedValue() < graphics_fence_value_) {
             WaitForSingleObject(graphics_fence_event_, INFINITE);
         }
-        // if (compute_fence_->GetCompletedValue() < compute_fence_value_) {
-        //     WaitForSingleObject(compute_fence_event_, INFINITE);
-        // }
 
         ++graphics_fence_value_;
-        // ++compute_fence_value_;
 
         PIXEndEvent(graphics_queue_.Get());
     }

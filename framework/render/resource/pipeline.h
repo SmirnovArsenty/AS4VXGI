@@ -105,4 +105,6 @@ public:
     void attach_compute_shader(const std::wstring& path, const std::vector<std::wstring>& defines);
 
     void create_command_list() override;
+
+    void create_command_list(D3D12_COMMAND_LIST_TYPE type);
 };
