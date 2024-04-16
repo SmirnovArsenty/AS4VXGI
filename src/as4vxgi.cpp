@@ -54,10 +54,7 @@ void AS4VXGI_Component::initialize()
             stage_visualize_pipeline_.attach_geometry_shader(L"./resources/shaders/voxels/draw.hlsl", {});
             stage_visualize_pipeline_.attach_pixel_shader(L"./resources/shaders/voxels/draw.hlsl", {});
 
-            // space 0
             stage_visualize_pipeline_.declare_bind<CAMERA_DATA_BIND>();
-
-            // space 1
             stage_visualize_pipeline_.declare_bind<VOXELS_BIND>();
             stage_visualize_pipeline_.declare_bind<VOXEL_DATA_BIND>();
 
@@ -67,6 +64,15 @@ void AS4VXGI_Component::initialize()
             stage_visualize_pipeline_.setup_primitive_topology_type(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
 
             stage_visualize_pipeline_.create_command_list();
+            stage_visualize_pipeline_.cmd()->SetName(L"Voxels visualize");
+        }
+
+        {
+            uav_copy_pipeline_.attach_compute_shader(L"./resources/shaders/voxels/copy_voxels.hlsl", {});
+            uav_copy_pipeline_.declare_bind<VOXELS_SRC_BIND>();
+            uav_copy_pipeline_.declare_bind<VOXELS_DST_BIND>();
+            uav_copy_pipeline_.create_command_list();
+            uav_copy_pipeline_.cmd()->SetName(L"Intermediate->render copy voxels");
         }
     }
 
@@ -76,12 +82,20 @@ void AS4VXGI_Component::initialize()
         HRESULT_CHECK(device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
             D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(voxels_uav_size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
             D3D12_RESOURCE_STATE_COMMON, nullptr,
+            IID_PPV_ARGS(uav_voxels_resource_intermediate_.GetAddressOf())));
+        uav_voxels_resource_intermediate_->SetName(L"Intermediate voxels resource");
+
+        HRESULT_CHECK(device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+            D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(voxels_uav_size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
+            D3D12_RESOURCE_STATE_COMMON, nullptr,
             IID_PPV_ARGS(uav_voxels_resource_.GetAddressOf())));
+        uav_voxels_resource_->SetName(L"Render voxels resource");
 
         HRESULT_CHECK(device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
             D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(voxels_uav_size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
             D3D12_RESOURCE_STATE_COMMON, nullptr,
             IID_PPV_ARGS(uav_voxels_resource_compute_.GetAddressOf())));
+        uav_voxels_resource_->SetName(L"Compute voxels resource");
 
         {
             D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
@@ -91,6 +105,9 @@ void AS4VXGI_Component::initialize()
             uav_desc.Buffer.NumElements = voxel_grid_dim * voxel_grid_dim * voxel_grid_dim;
             uav_desc.Buffer.StructureByteStride = sizeof(Voxel);
             uav_desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+
+            uav_voxels_resource_index_intermediate_= Game::inst()->render().allocate_resource_descriptor(uav_voxels_intermediate_, uav_voxels_gpu_intermediate_);
+            device->CreateUnorderedAccessView(uav_voxels_resource_intermediate_.Get(), nullptr, &uav_desc, uav_voxels_intermediate_);
 
             uav_voxels_resource_index_ = Game::inst()->render().allocate_resource_descriptor(uav_voxels_, uav_voxels_gpu_);
             device->CreateUnorderedAccessView(uav_voxels_resource_.Get(), nullptr, &uav_desc, uav_voxels_);
@@ -153,16 +170,46 @@ void AS4VXGI_Component::initialize()
 
 void AS4VXGI_Component::draw()
 {
+    auto device = Game::inst()->render().device();
     auto graphics_command_list_allocator = Game::inst()->render().graphics_command_allocator();
     auto resource_descriptor_heap = Game::inst()->render().resource_descriptor_heap();
     const auto render_target = Game::inst()->render().render_target();
     const auto depth_stencil_target = Game::inst()->render().depth_stencil();
     auto graphics_queue = Game::inst()->render().graphics_queue();
-    if (true)
+    if (false)
     {
         // visualize voxel grid
         {
-            std::lock_guard<std::mutex> lg(uav_voxels_copy_mutex_);
+            std::lock_guard lg(intermediate_uav_voxels_copy_mutex_);
+
+            {
+                HRESULT_CHECK(uav_copy_pipeline_.cmd()->Reset(graphics_command_list_allocator.Get(), uav_copy_pipeline_.get_pso()));
+                PIXBeginEvent(uav_copy_pipeline_.cmd(), PIX_COLOR(0x0, 0xFF, 0x0), "Intermediate->render voxels copy");
+
+                uav_copy_pipeline_.cmd()->SetComputeRootSignature(uav_copy_pipeline_.get_root_signature());
+                uav_copy_pipeline_.cmd()->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
+                uav_copy_pipeline_.cmd()->SetComputeRootDescriptorTable(uav_copy_pipeline_.resource_index<VOXELS_SRC_BIND>(), uav_voxels_gpu_intermediate_);
+                uav_copy_pipeline_.cmd()->SetComputeRootDescriptorTable(uav_copy_pipeline_.resource_index<VOXELS_DST_BIND>(), uav_voxels_gpu_);
+                uav_copy_pipeline_.cmd()->Dispatch(align(voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 256) / 256, 1, 1);
+
+                PIXEndEvent(uav_copy_pipeline_.cmd());
+                HRESULT_CHECK(uav_copy_pipeline_.cmd()->Close());
+            }
+
+            {
+                PIXBeginEvent(graphics_queue.Get(), PIX_COLOR(0x0, 0xFF, 0x0), "sync after copy intermediate->render");
+                graphics_queue->Signal(voxels_uav_usage_fence_.Get(), voxels_uav_usage_fence_value_);
+
+                HRESULT_CHECK(voxels_uav_usage_fence_->SetEventOnCompletion(voxels_uav_usage_fence_value_, voxels_uav_usage_fence_event_));
+                if (voxels_uav_usage_fence_->GetCompletedValue() < voxels_uav_usage_fence_value_) {
+                    WaitForSingleObject(voxels_uav_usage_fence_event_, INFINITE);
+                }
+                ++voxels_uav_usage_fence_value_;
+                PIXEndEvent(graphics_queue.Get());
+            }
+        }
+
+        {
             stage_visualize_pipeline_.cmd()->Reset(graphics_command_list_allocator.Get(), stage_visualize_pipeline_.get_pso());
             PIXBeginEvent(stage_visualize_pipeline_.cmd(), PIX_COLOR(0x0, 0xFF, 0x0), "Voxels draw");
 
@@ -182,29 +229,22 @@ void AS4VXGI_Component::draw()
             PIXEndEvent(stage_visualize_pipeline_.cmd());
             HRESULT_CHECK(stage_visualize_pipeline_.cmd()->Close());
 
-            ID3D12CommandList* lists[] = {stage_visualize_pipeline_.cmd()};
+            ID3D12CommandList* lists[] = { stage_visualize_pipeline_.cmd() };
             graphics_queue->ExecuteCommandLists(_countof(lists), lists);
-
-            PIXBeginEvent(graphics_queue.Get(), PIX_COLOR(0x0, 0xFF, 0x0), "sync");
-            graphics_queue->Signal(voxels_uav_usage_fence_.Get(), voxels_uav_usage_fence_value_);
-
-            HRESULT_CHECK(voxels_uav_usage_fence_->SetEventOnCompletion(voxels_uav_usage_fence_value_, voxels_uav_usage_fence_event_));
-            if (voxels_uav_usage_fence_->GetCompletedValue() < voxels_uav_usage_fence_value_) {
-                WaitForSingleObject(voxels_uav_usage_fence_event_, INFINITE);
-            }
-            ++voxels_uav_usage_fence_value_;
-            PIXEndEvent(graphics_queue.Get());
         }
     }
 
-    std::vector<ID3D12CommandList*> graphics_command_lists;
+    ComPtr<ID3D12GraphicsCommandList> draw_cmd_list;
+    device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, graphics_command_list_allocator.Get(), nullptr, IID_PPV_ARGS(&draw_cmd_list));
+    HRESULT_CHECK(draw_cmd_list->Close());
+    HRESULT_CHECK(draw_cmd_list->Reset(graphics_command_list_allocator.Get(), nullptr));
+
     for (ModelTree* model_tree : model_trees_) {
-        std::vector<ID3D12CommandList*> current_cmd_lists = model_tree->draw(Game::inst()->render().camera());
-        for (auto cmd : current_cmd_lists) {
-            graphics_command_lists.push_back(cmd);
-        }
+        model_tree->draw(Game::inst()->render().camera(), draw_cmd_list.Get());
     }
-    graphics_queue->ExecuteCommandLists(static_cast<UINT>(graphics_command_lists.size()), graphics_command_lists.data());
+
+    HRESULT_CHECK(draw_cmd_list->Close());
+    graphics_queue->ExecuteCommandLists(1, (ID3D12CommandList**)draw_cmd_list.GetAddressOf());
 }
 
 void AS4VXGI_Component::imgui()
@@ -231,10 +271,11 @@ void AS4VXGI_Component::imgui()
     }
     ImGui::End();
 
-    if (local_voxel_grid_dim > 0 && local_voxel_grid_size > 0) {
+    if (false && local_voxel_grid_dim > 0 && local_voxel_grid_size > 0) {
+        /// TODO: handle all uavs recreation
         if (local_voxel_grid_dim != voxel_grid_dim) {
-            std::lock_guard lg(uav_voxels_copy_mutex_);
-            // uav_voxels_resource_.Reset();
+            std::lock_guard lg(intermediate_uav_voxels_copy_mutex_);
+            uav_voxels_resource_.Reset();
             UINT voxels_uav_size = local_voxel_grid_dim * local_voxel_grid_dim * local_voxel_grid_dim * sizeof(Voxel);
             auto device = Game::inst()->render().device();
 
@@ -286,7 +327,7 @@ void AS4VXGI_Component::destroy_resources()
 
     //stage_visualize_pipeline_;
 
-    SAFE_RELEASE(voxels_uav_usage_fence_);
+    voxels_uav_usage_fence_.Reset();
     CloseHandle(voxels_uav_usage_fence_event_);
 
     model_matrix_srv_.clear();
@@ -299,8 +340,9 @@ void AS4VXGI_Component::destroy_resources()
 
     model_trees_.clear();
 
-    SAFE_RELEASE(uav_voxels_resource_);
-    SAFE_RELEASE(uav_voxels_resource_compute_);
+    uav_voxels_resource_.Reset();
+    uav_voxels_resource_compute_.Reset();
+    uav_voxels_resource_intermediate_.Reset();
 }
 
 // static
@@ -341,6 +383,7 @@ DWORD AS4VXGI_Component::compute_proc(LPVOID data)
     clear_voxels.attach_compute_shader(L"./resources/shaders/voxels/clear.hlsl", {});
     clear_voxels.declare_bind<VOXELS_BIND>();
     clear_voxels.create_command_list(D3D12_COMMAND_LIST_TYPE_COMPUTE, allocator);
+    clear_voxels.cmd()->SetName(L"Compute clear voxels");
 
     ComputePipeline fill_voxels;
     fill_voxels.attach_compute_shader(L"./resources/shaders/voxels/fill.hlsl", {});
@@ -352,21 +395,24 @@ DWORD AS4VXGI_Component::compute_proc(LPVOID data)
     fill_voxels.declare_bind<VOXEL_DATA_BIND>();
     fill_voxels.declare_bind<VOXELS_BIND>();
     fill_voxels.create_command_list(D3D12_COMMAND_LIST_TYPE_COMPUTE, allocator);
+    fill_voxels.cmd()->SetName(L"Compute fill voxels");
 
     ComputePipeline copy_voxels;
     copy_voxels.attach_compute_shader(L"./resources/shaders/voxels/copy_voxels.hlsl", {});
     copy_voxels.declare_bind<VOXELS_SRC_BIND>();
     copy_voxels.declare_bind<VOXELS_DST_BIND>();
     copy_voxels.create_command_list(D3D12_COMMAND_LIST_TYPE_COMPUTE, allocator);
+    copy_voxels.cmd()->SetName(L"Compute->intermediate copy voxels");
 
     while (self->run_compute_thread_)
     {
         HRESULT_CHECK(allocator->Reset());
+        HRESULT_CHECK(clear_voxels.cmd()->Reset(allocator, nullptr));
 
         {
-            HRESULT_CHECK(clear_voxels.cmd()->Reset(allocator, clear_voxels.get_pso()));
             PIXBeginEvent(clear_voxels.cmd(), PIX_COLOR(0xFF, 0x0, 0x0), "Clear voxels");
 
+            clear_voxels.cmd()->SetPipelineState(clear_voxels.get_pso());
             clear_voxels.cmd()->SetComputeRootSignature(clear_voxels.get_root_signature());
             clear_voxels.cmd()->SetDescriptorHeaps(1, resource_heap.GetAddressOf());
             clear_voxels.cmd()->SetComputeRootDescriptorTable(clear_voxels.resource_index<VOXELS_BIND>(), self->uav_voxels_gpu_compute_);
@@ -375,43 +421,47 @@ DWORD AS4VXGI_Component::compute_proc(LPVOID data)
             clear_voxels.cmd()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(self->uav_voxels_resource_compute_.Get()));
 
             PIXEndEvent(clear_voxels.cmd());
-            HRESULT_CHECK(clear_voxels.cmd()->Close());
         }
 
         { // fill voxels uav
-            fill_voxels.cmd()->Reset(allocator, fill_voxels.get_pso());
-            PIXBeginEvent(fill_voxels.cmd(), PIX_COLOR(0xFF, 0x0, 0x0), "Voxels fill");
+            PIXBeginEvent(clear_voxels.cmd(), PIX_COLOR(0xFF, 0x0, 0x0), "Voxels fill");
 
-            fill_voxels.cmd()->SetComputeRootSignature(fill_voxels.get_root_signature());
-            fill_voxels.cmd()->SetDescriptorHeaps(1, resource_heap.GetAddressOf());
-            fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
+            clear_voxels.cmd()->SetPipelineState(fill_voxels.get_pso());
+            clear_voxels.cmd()->SetComputeRootSignature(fill_voxels.get_root_signature());
+            clear_voxels.cmd()->SetDescriptorHeaps(1, resource_heap.GetAddressOf());
+            clear_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
 
-            fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VOXEL_DATA_BIND>(), self->voxel_data_cb_.gpu_descriptor_handle());
-            fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VOXELS_BIND>(), self->uav_voxels_gpu_compute_);
+            clear_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VOXEL_DATA_BIND>(), self->voxel_data_cb_.gpu_descriptor_handle());
+            clear_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VOXELS_BIND>(), self->uav_voxels_gpu_compute_);
 
             for (int i = 0; i < self->mesh_trees_srv_.size(); ++i) {
                 for (int32_t j = 0; j < self->mesh_trees_srv_[i].size(); ++j) {
                     self->voxel_data_.voxelGrid.mesh_node_count = static_cast<int32_t>(self->mesh_trees_srv_[i][j]->size());
                     self->voxel_data_cb_.update(self->voxel_data_);
 
-                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<MESH_TREE_BIND>(), self->mesh_trees_srv_[i][j]->gpu_descriptor_handle());
-                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<INDICES_BIND>(), self->index_buffers_srv_[i][j]);
-                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VERTICES_BIND>(), self->vertex_buffers_srv_[i][j]);
-                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<MODEL_MATRICES_BIND>(), self->model_matrix_srv_[i][j]->gpu_descriptor_handle());
+                    clear_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<MESH_TREE_BIND>(), self->mesh_trees_srv_[i][j]->gpu_descriptor_handle());
+                    clear_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<INDICES_BIND>(), self->index_buffers_srv_[i][j]);
+                    clear_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VERTICES_BIND>(), self->vertex_buffers_srv_[i][j]);
+                    clear_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<MODEL_MATRICES_BIND>(), self->model_matrix_srv_[i][j]->gpu_descriptor_handle());
 
-                    fill_voxels.cmd()->Dispatch(align(voxel_grid_dim, 4) / 4,
+                    clear_voxels.cmd()->Dispatch(align(voxel_grid_dim, 4) / 4,
                         align(voxel_grid_dim, 4) / 4,
                         align(voxel_grid_dim, 4) / 4);
                 }
             }
-            fill_voxels.cmd()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(self->uav_voxels_resource_compute_.Get()));
 
-            PIXEndEvent(fill_voxels.cmd());
-            HRESULT_CHECK(fill_voxels.cmd()->Close());
+            PIXEndEvent(clear_voxels.cmd());
+            HRESULT_CHECK(clear_voxels.cmd()->Close());
+        }
+
+        // flush
+        {
+            ID3D12CommandList* list = clear_voxels.cmd();
+            compute_queue->ExecuteCommandLists(1, &list);
         }
 
         {
-            std::lock_guard<std::mutex> lg(self->uav_voxels_copy_mutex_);
+            std::lock_guard lg(self->intermediate_uav_voxels_copy_mutex_);
 
             { // copy voxels to render thread
                 HRESULT_CHECK(copy_voxels.cmd()->Reset(allocator, copy_voxels.get_pso()));
@@ -420,26 +470,26 @@ DWORD AS4VXGI_Component::compute_proc(LPVOID data)
                 copy_voxels.cmd()->SetComputeRootSignature(copy_voxels.get_root_signature());
                 copy_voxels.cmd()->SetDescriptorHeaps(1, resource_heap.GetAddressOf());
                 copy_voxels.cmd()->SetComputeRootDescriptorTable(copy_voxels.resource_index<VOXELS_SRC_BIND>(), self->uav_voxels_gpu_compute_);
-                copy_voxels.cmd()->SetComputeRootDescriptorTable(copy_voxels.resource_index<VOXELS_DST_BIND>(), self->uav_voxels_gpu_);
+                copy_voxels.cmd()->SetComputeRootDescriptorTable(copy_voxels.resource_index<VOXELS_DST_BIND>(), self->uav_voxels_gpu_intermediate_);
                 copy_voxels.cmd()->Dispatch(align(voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 256) / 256, 1, 1);
-
-                copy_voxels.cmd()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(self->uav_voxels_resource_.Get()));
 
                 PIXEndEvent(copy_voxels.cmd());
                 HRESULT_CHECK(copy_voxels.cmd()->Close());
             }
 
-            ID3D12CommandList* cmd_lists[] = {clear_voxels.cmd(), fill_voxels.cmd(), copy_voxels.cmd()};
-            compute_queue->ExecuteCommandLists(_countof(cmd_lists), cmd_lists);
+            ID3D12CommandList* list = copy_voxels.cmd();
+            compute_queue->ExecuteCommandLists(1, &list);
 
-            PIXBeginEvent(compute_queue, PIX_COLOR(0xFF, 0x0, 0x0), "sync");
-            HRESULT_CHECK(compute_queue->Signal(compute_fence, compute_fence_value));
-            HRESULT_CHECK(compute_fence->SetEventOnCompletion(compute_fence_value, compute_fence_event));
-            if (compute_fence->GetCompletedValue() < compute_fence_value) {
-                WaitForSingleObject(compute_fence_event, INFINITE);
+            {
+                PIXBeginEvent(compute_queue, PIX_COLOR(0xFF, 0x0, 0x0), "sync after copy compute->intermediate");
+                HRESULT_CHECK(compute_queue->Signal(compute_fence, compute_fence_value));
+                HRESULT_CHECK(compute_fence->SetEventOnCompletion(compute_fence_value, compute_fence_event));
+                if (compute_fence->GetCompletedValue() < compute_fence_value) {
+                    WaitForSingleObject(compute_fence_event, INFINITE);
+                }
+                ++compute_fence_value;
+                PIXEndEvent(compute_queue);
             }
-            ++compute_fence_value;
-            PIXEndEvent(compute_queue);
         }
     }
 

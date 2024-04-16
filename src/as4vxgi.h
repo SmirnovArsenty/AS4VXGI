@@ -27,7 +27,12 @@ private:
     VOXEL_DATA_BIND voxel_data_;
     ConstBuffer<VOXEL_DATA_BIND> voxel_data_cb_;
 
-    std::mutex uav_voxels_copy_mutex_;
+    std::mutex intermediate_uav_voxels_copy_mutex_;
+    ComPtr<ID3D12Resource> uav_voxels_resource_intermediate_{ nullptr };
+    UINT uav_voxels_resource_index_intermediate_;
+    D3D12_CPU_DESCRIPTOR_HANDLE uav_voxels_intermediate_;
+    D3D12_GPU_DESCRIPTOR_HANDLE uav_voxels_gpu_intermediate_;
+
     ComPtr<ID3D12Resource> uav_voxels_resource_{ nullptr };
     UINT uav_voxels_resource_index_;
     D3D12_CPU_DESCRIPTOR_HANDLE uav_voxels_;
@@ -39,6 +44,8 @@ private:
     std::vector<std::vector<ShaderResource<Matrix>*>> model_matrix_srv_;
 // #ifndef NDEBUG
     GraphicsPipeline stage_visualize_pipeline_;
+    ComPtr<ID3D12CommandAllocator> compute_command_allocator_;
+    ComputePipeline uav_copy_pipeline_;
 // #endif
 
     ComPtr<ID3D12Fence> voxels_uav_usage_fence_{ nullptr };

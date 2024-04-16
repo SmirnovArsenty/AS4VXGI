@@ -34,7 +34,7 @@ public:
 
     void update();
 
-    std::vector<ID3D12CommandList*> draw(Camera* camera);
+    void draw(Camera* camera, ID3D12GraphicsCommandList* cmd_list);
 
     std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> get_index_buffers_srv();
     std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> get_vertex_buffers_srv();
@@ -57,12 +57,15 @@ private:
 
         void destroy();
 
-        void draw(GraphicsPipeline& cmd_list);
 #ifndef NDEBUG
-        ID3D12CommandList* debug_draw(D3D12_GPU_DESCRIPTOR_HANDLE model_data_descriptor_handle);
+        const D3D12_INDEX_BUFFER_VIEW& get_box_index_buffer_view() { return box_index_buffer_.view(); }
+        const D3D12_VERTEX_BUFFER_VIEW& get_box_vertex_buffer_view() { return box_vertex_buffer_.view(); }
+        D3D12_GPU_DESCRIPTOR_HANDLE box_transformation_srv_gpu_handle();
 #endif
 
+        const D3D12_INDEX_BUFFER_VIEW& get_index_buffer_view() { return index_buffer_.view(); }
         D3D12_GPU_DESCRIPTOR_HANDLE& get_index_buffer_srv() { return index_buffer_srv_gpu_; }
+        const D3D12_VERTEX_BUFFER_VIEW& get_vertex_buffer_view() { return vertex_buffer_.view(); }
         D3D12_GPU_DESCRIPTOR_HANDLE& get_vertex_buffer_srv() { return vertex_buffer_srv_gpu_; }
 
         const std::vector<uint32_t>& get_indices() const;
@@ -96,7 +99,6 @@ private:
         void split_vertices(float min[3], float max[3], int32_t start, int32_t count, int32_t current_mesh_node_index);
 
 #ifndef NDEBUG
-        GraphicsPipeline box_visualize_pipeline_;
         ComPtr<ID3D12Resource> box_transformations_;
         void* box_transformations_mapped_ptr_ = nullptr;
         UINT box_transformation_resource_index_;
@@ -130,4 +132,8 @@ private:
     // GraphicsShader normal_shader_;
 
     GraphicsPipeline graphics_pipeline_;
+
+#ifndef NDEBUG
+    GraphicsPipeline box_visualize_pipeline_;
+#endif
 };
