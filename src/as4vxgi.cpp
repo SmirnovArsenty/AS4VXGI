@@ -407,9 +407,9 @@ DWORD AS4VXGI_Component::compute_proc(LPVOID data)
     while (self->run_compute_thread_)
     {
         HRESULT_CHECK(allocator->Reset());
-        HRESULT_CHECK(clear_voxels.cmd()->Reset(allocator, nullptr));
 
         {
+            HRESULT_CHECK(clear_voxels.cmd()->Reset(allocator, nullptr));
             PIXBeginEvent(clear_voxels.cmd(), PIX_COLOR(0xFF, 0x0, 0x0), "Clear voxels");
 
             clear_voxels.cmd()->SetPipelineState(clear_voxels.get_pso());
@@ -421,42 +421,42 @@ DWORD AS4VXGI_Component::compute_proc(LPVOID data)
             clear_voxels.cmd()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(self->uav_voxels_resource_compute_.Get()));
 
             PIXEndEvent(clear_voxels.cmd());
+            HRESULT_CHECK(clear_voxels.cmd()->Close());
+            ID3D12CommandList* list = clear_voxels.cmd();
+            compute_queue->ExecuteCommandLists(1, &list);
         }
 
         { // fill voxels uav
-            PIXBeginEvent(clear_voxels.cmd(), PIX_COLOR(0xFF, 0x0, 0x0), "Voxels fill");
+            HRESULT_CHECK(fill_voxels.cmd()->Reset(allocator, nullptr));
+            PIXBeginEvent(fill_voxels.cmd(), PIX_COLOR(0xFF, 0x0, 0x0), "Voxels fill");
 
-            clear_voxels.cmd()->SetPipelineState(fill_voxels.get_pso());
-            clear_voxels.cmd()->SetComputeRootSignature(fill_voxels.get_root_signature());
-            clear_voxels.cmd()->SetDescriptorHeaps(1, resource_heap.GetAddressOf());
-            clear_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
+            fill_voxels.cmd()->SetPipelineState(fill_voxels.get_pso());
+            fill_voxels.cmd()->SetComputeRootSignature(fill_voxels.get_root_signature());
+            fill_voxels.cmd()->SetDescriptorHeaps(1, resource_heap.GetAddressOf());
+            fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
 
-            clear_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VOXEL_DATA_BIND>(), self->voxel_data_cb_.gpu_descriptor_handle());
-            clear_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VOXELS_BIND>(), self->uav_voxels_gpu_compute_);
+            fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VOXEL_DATA_BIND>(), self->voxel_data_cb_.gpu_descriptor_handle());
+            fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VOXELS_BIND>(), self->uav_voxels_gpu_compute_);
 
             for (int i = 0; i < self->mesh_trees_srv_.size(); ++i) {
                 for (int32_t j = 0; j < self->mesh_trees_srv_[i].size(); ++j) {
                     self->voxel_data_.voxelGrid.mesh_node_count = static_cast<int32_t>(self->mesh_trees_srv_[i][j]->size());
                     self->voxel_data_cb_.update(self->voxel_data_);
 
-                    clear_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<MESH_TREE_BIND>(), self->mesh_trees_srv_[i][j]->gpu_descriptor_handle());
-                    clear_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<INDICES_BIND>(), self->index_buffers_srv_[i][j]);
-                    clear_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VERTICES_BIND>(), self->vertex_buffers_srv_[i][j]);
-                    clear_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<MODEL_MATRICES_BIND>(), self->model_matrix_srv_[i][j]->gpu_descriptor_handle());
+                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<MESH_TREE_BIND>(), self->mesh_trees_srv_[i][j]->gpu_descriptor_handle());
+                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<INDICES_BIND>(), self->index_buffers_srv_[i][j]);
+                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VERTICES_BIND>(), self->vertex_buffers_srv_[i][j]);
+                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<MODEL_MATRICES_BIND>(), self->model_matrix_srv_[i][j]->gpu_descriptor_handle());
 
-                    clear_voxels.cmd()->Dispatch(align(voxel_grid_dim, 4) / 4,
+                    fill_voxels.cmd()->Dispatch(align(voxel_grid_dim, 4) / 4,
                         align(voxel_grid_dim, 4) / 4,
                         align(voxel_grid_dim, 4) / 4);
                 }
             }
 
-            PIXEndEvent(clear_voxels.cmd());
-            HRESULT_CHECK(clear_voxels.cmd()->Close());
-        }
-
-        // flush
-        {
-            ID3D12CommandList* list = clear_voxels.cmd();
+            PIXEndEvent(fill_voxels.cmd());
+            HRESULT_CHECK(fill_voxels.cmd()->Close());
+            ID3D12CommandList* list = fill_voxels.cmd();
             compute_queue->ExecuteCommandLists(1, &list);
         }
 
