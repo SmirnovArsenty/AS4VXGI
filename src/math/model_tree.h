@@ -133,7 +133,5 @@ private:
 
     GraphicsPipeline graphics_pipeline_;
 
-#ifndef NDEBUG
     GraphicsPipeline box_visualize_pipeline_;
-#endif
 };

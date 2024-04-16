@@ -8,8 +8,8 @@
 
 #include <imgui/imgui.h>
 
-int32_t voxel_grid_dim = 30;
-float voxel_grid_size = 1000;
+int32_t voxel_grid_dim = 100;
+float voxel_grid_size = 10000;
 
 inline int align(int value, int alignment)
 {
@@ -36,7 +36,7 @@ void AS4VXGI_Component::initialize()
     //model_trees_.back()->load("./resources/models/suzanne.fbx", Vector3(0, 0, -150));
     //model_trees_.push_back(new ModelTree{});
     //model_trees_.back()->load("./resources/models/terrain.fbx");
-    //model.load("./resources/models/sponza/source/sponza.fbx");
+    //model_trees_.back()->load("./resources/models/sponza/source/sponza.fbx");
 
     auto device = Game::inst()->render().device();
 
@@ -176,7 +176,7 @@ void AS4VXGI_Component::draw()
     const auto render_target = Game::inst()->render().render_target();
     const auto depth_stencil_target = Game::inst()->render().depth_stencil();
     auto graphics_queue = Game::inst()->render().graphics_queue();
-    if (false)
+    if (true)
     {
         // visualize voxel grid
         {
@@ -194,6 +194,9 @@ void AS4VXGI_Component::draw()
 
                 PIXEndEvent(uav_copy_pipeline_.cmd());
                 HRESULT_CHECK(uav_copy_pipeline_.cmd()->Close());
+
+                ID3D12CommandList* list = uav_copy_pipeline_.cmd();
+                graphics_queue->ExecuteCommandLists(1, &list);
             }
 
             {
@@ -348,6 +351,7 @@ void AS4VXGI_Component::destroy_resources()
 // static
 DWORD AS4VXGI_Component::compute_proc(LPVOID data)
 {
+    //return 0;
     AS4VXGI_Component* self = static_cast<AS4VXGI_Component*>(data);
 
     auto device = Game::inst()->render().device();
@@ -427,19 +431,18 @@ DWORD AS4VXGI_Component::compute_proc(LPVOID data)
         }
 
         { // fill voxels uav
-            HRESULT_CHECK(fill_voxels.cmd()->Reset(allocator, nullptr));
-            PIXBeginEvent(fill_voxels.cmd(), PIX_COLOR(0xFF, 0x0, 0x0), "Voxels fill");
-
-            fill_voxels.cmd()->SetPipelineState(fill_voxels.get_pso());
-            fill_voxels.cmd()->SetComputeRootSignature(fill_voxels.get_root_signature());
-            fill_voxels.cmd()->SetDescriptorHeaps(1, resource_heap.GetAddressOf());
-            fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
-
-            fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VOXEL_DATA_BIND>(), self->voxel_data_cb_.gpu_descriptor_handle());
-            fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VOXELS_BIND>(), self->uav_voxels_gpu_compute_);
-
+            PIXBeginEvent(compute_queue, PIX_COLOR(0xFF, 0x0, 0x0), "Voxels fill");
             for (int i = 0; i < self->mesh_trees_srv_.size(); ++i) {
                 for (int32_t j = 0; j < self->mesh_trees_srv_[i].size(); ++j) {
+                    HRESULT_CHECK(fill_voxels.cmd()->Reset(allocator, nullptr));
+                    fill_voxels.cmd()->SetPipelineState(fill_voxels.get_pso());
+                    fill_voxels.cmd()->SetComputeRootSignature(fill_voxels.get_root_signature());
+                    fill_voxels.cmd()->SetDescriptorHeaps(1, resource_heap.GetAddressOf());
+                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
+
+                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VOXEL_DATA_BIND>(), self->voxel_data_cb_.gpu_descriptor_handle());
+                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VOXELS_BIND>(), self->uav_voxels_gpu_compute_);
+
                     self->voxel_data_.voxelGrid.mesh_node_count = static_cast<int32_t>(self->mesh_trees_srv_[i][j]->size());
                     self->voxel_data_cb_.update(self->voxel_data_);
 
@@ -451,13 +454,24 @@ DWORD AS4VXGI_Component::compute_proc(LPVOID data)
                     fill_voxels.cmd()->Dispatch(align(voxel_grid_dim, 4) / 4,
                         align(voxel_grid_dim, 4) / 4,
                         align(voxel_grid_dim, 4) / 4);
+
+                    HRESULT_CHECK(fill_voxels.cmd()->Close());
+                    ID3D12CommandList* list = fill_voxels.cmd();
+                    compute_queue->ExecuteCommandLists(1, &list);
+
+                    {
+                        PIXBeginEvent(compute_queue, PIX_COLOR(0xFF, 0x0, 0x0), "sync after voxels fill");
+                        HRESULT_CHECK(compute_queue->Signal(compute_fence, compute_fence_value));
+                        HRESULT_CHECK(compute_fence->SetEventOnCompletion(compute_fence_value, compute_fence_event));
+                        if (compute_fence->GetCompletedValue() < compute_fence_value) {
+                            WaitForSingleObject(compute_fence_event, INFINITE);
+                        }
+                        ++compute_fence_value;
+                        PIXEndEvent(compute_queue);
+                    }
                 }
             }
-
-            PIXEndEvent(fill_voxels.cmd());
-            HRESULT_CHECK(fill_voxels.cmd()->Close());
-            ID3D12CommandList* list = fill_voxels.cmd();
-            compute_queue->ExecuteCommandLists(1, &list);
+            PIXEndEvent(compute_queue);
         }
 
         {

@@ -79,7 +79,7 @@ template<class T>
 class ShaderResource
 {
 private:
-    ComPtr<ID3D12Resource> resource_;
+    ID3D12Resource* resource_;
     UINT resource_index_;
     D3D12_CPU_DESCRIPTOR_HANDLE resource_view_;
     D3D12_GPU_DESCRIPTOR_HANDLE resource_view_gpu_;
@@ -89,7 +89,10 @@ public:
     ShaderResource() = default;
     ~ShaderResource()
     {
-        SAFE_RELEASE(resource_);
+        if (resource_) {
+            resource_->Release();
+            resource_ = nullptr;
+        }
     }
 
     void initialize(T* data, UINT size)
@@ -99,18 +102,61 @@ public:
         auto device = Game::inst()->render().device();
 
         HRESULT_CHECK(device->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
             D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(sizeof(T)),
+            &CD3DX12_RESOURCE_DESC::Buffer(size * sizeof(T)),
             D3D12_RESOURCE_STATE_COMMON,
             nullptr,
-            IID_PPV_ARGS(resource_.ReleaseAndGetAddressOf())));
+            IID_PPV_ARGS(&resource_)));
 
-        CD3DX12_RANGE range(0, 0);
-        void* mapped_ptr = nullptr;
-        HRESULT_CHECK(resource_->Map(0, &range, &mapped_ptr));
-        memcpy(mapped_ptr, data, sizeof(T) * size);
-        resource_->Unmap(0, &range);
+        { // copy resource on gpu
+            ID3D12Resource* tmp;
+            ID3D12GraphicsCommandList* copy_cmd;
+            {
+                HRESULT_CHECK(device->CreateCommittedResource(
+                    &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+                    D3D12_HEAP_FLAG_NONE,
+                    &CD3DX12_RESOURCE_DESC::Buffer(size * sizeof(T)),
+                    D3D12_RESOURCE_STATE_COPY_SOURCE,
+                    nullptr,
+                    IID_PPV_ARGS(&tmp)));
+                tmp->SetName(L"Temporary object to upload data");
+
+                CD3DX12_RANGE range(0, 0);
+                void* mapped_ptr = nullptr;
+                HRESULT_CHECK(tmp->Map(0, &range, &mapped_ptr));
+                memcpy(mapped_ptr, data, sizeof(T) * size);
+                tmp->Unmap(0, &range);
+            }
+            {
+                device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, Game::inst()->render().graphics_command_allocator().Get(), nullptr, IID_PPV_ARGS(&copy_cmd));
+                PIXBeginEvent(copy_cmd, PIX_COLOR(0xFF, 0xFF, 0x00), "Copy shader resource");
+                copy_cmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(resource_, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST));
+                copy_cmd->CopyResource(resource_, tmp);
+                copy_cmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(resource_, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE));
+                PIXEndEvent(copy_cmd);
+                HRESULT_CHECK(copy_cmd->Close());
+
+                Game::inst()->render().graphics_queue()->ExecuteCommandLists(1, (ID3D12CommandList**)&copy_cmd);
+            }
+
+            { // sync
+                ID3D12Fence* fence;
+                device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
+                HANDLE ev = CreateEvent(nullptr, false, false, nullptr);
+                fence->SetEventOnCompletion(1, ev);
+                Game::inst()->render().graphics_queue()->Signal(fence, 1);
+                if (fence->GetCompletedValue() < 1)
+                {
+                    WaitForSingleObject(ev, INFINITE);
+                }
+                CloseHandle(ev);
+                fence->Release();
+            }
+
+            tmp->Release();
+            copy_cmd->Release();
+        }
 
         resource_index_ = Game::inst()->render().allocate_resource_descriptor(resource_view_, resource_view_gpu_);
 
@@ -122,7 +168,7 @@ public:
         desc.Buffer.StructureByteStride = sizeof(T);
         desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
         desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        device->CreateShaderResourceView(resource_.Get(), &desc, resource_view_);
+        device->CreateShaderResourceView(resource_, &desc, resource_view_);
     }
 
     UINT size() const

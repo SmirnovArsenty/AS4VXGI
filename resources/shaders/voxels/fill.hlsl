@@ -114,9 +114,9 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
         for (uint i = 0; i < voxelGrid.mesh_node_count; ++i) {
 #if OPTIMIZATION
             uint parent_index = (max(i, 1u) - 1u) / 2u;
-            // for (parent_index = (max(i, 1u) - 1u) / 2u; parent_index / BITS_COUNT > ARRAY_SIZE; ++count_parents_not_found) {
-            //     parent_index = (max(parent_index, 1u) - 1u) / 2u;
-            // }
+            for (parent_index = (max(i, 1u) - 1u) / 2u; parent_index / BITS_COUNT > ARRAY_SIZE; ++count_parents_not_found) {
+                parent_index = (max(parent_index, 1u) - 1u) / 2u;
+            }
             bool need_check = true;
             if (parent_index / BITS_COUNT < ARRAY_SIZE) {
                 uint parent_hit_bit = (1U << (parent_index - (parent_index / BITS_COUNT) * BITS_COUNT));

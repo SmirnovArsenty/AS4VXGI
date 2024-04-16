@@ -61,20 +61,23 @@ void Render::initialize()
 
 #if !defined(NDEBUG)
 
-    // enable break on validation errors and warnings
-    device_->QueryInterface(IID_PPV_ARGS(info_queue_.GetAddressOf()));
-
-    HRESULT_CHECK(info_queue_->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true));
-    HRESULT_CHECK(info_queue_->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, false));
-
-    D3D12_MESSAGE_SEVERITY muted_severities[] = { D3D12_MESSAGE_SEVERITY_INFO };
-    //D3D12_MESSAGE_ID muted_ids[] = {
-    //    // D3D12_MESSAGE_ID_...
-    //    };
-    D3D12_INFO_QUEUE_FILTER filter{
-       {},
-       {0, nullptr, _countof(muted_severities), muted_severities, 0, nullptr }}; //_countof(muted_ids), muted_ids} };
-    info_queue_->PushStorageFilter(&filter);
+    if (true)
+    {
+        // enable break on validation errors and warnings
+        device_->QueryInterface(IID_PPV_ARGS(info_queue_.GetAddressOf()));
+        
+        HRESULT_CHECK(info_queue_->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true));
+        HRESULT_CHECK(info_queue_->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, false));
+        
+        D3D12_MESSAGE_SEVERITY muted_severities[] = { D3D12_MESSAGE_SEVERITY_INFO };
+        //D3D12_MESSAGE_ID muted_ids[] = {
+        //    // D3D12_MESSAGE_ID_...
+        //    };
+        D3D12_INFO_QUEUE_FILTER filter{
+           {},
+           {0, nullptr, _countof(muted_severities), muted_severities, 0, nullptr }}; //_countof(muted_ids), muted_ids} };
+        info_queue_->PushStorageFilter(&filter);
+    }
 
 #endif
 
