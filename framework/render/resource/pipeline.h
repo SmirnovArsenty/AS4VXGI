@@ -19,8 +19,6 @@ protected:
 
     ComPtr<ID3D12PipelineState> pso_{ nullptr };
 
-    ComPtr<ID3D12GraphicsCommandList> command_list_{ nullptr };
-
     void create_root_signature();
 public:
     virtual ~Pipeline();
@@ -59,9 +57,8 @@ public:
         return -1;
     }
 
-    virtual void create_command_list() = 0;
+    virtual void create_pso_and_root_signature() = 0;
 
-    ID3D12GraphicsCommandList* cmd() const;
     ID3D12RootSignature* get_root_signature() const;
     ID3D12PipelineState* get_pso() const;
 };
@@ -89,7 +86,7 @@ public:
     void attach_geometry_shader(const std::wstring& path, const std::vector<std::wstring>& defines);
     void attach_pixel_shader(const std::wstring& path, const std::vector<std::wstring>& defines);
 
-    void create_command_list() override;
+    void create_pso_and_root_signature() override;
 };
 
 class ComputePipeline : public Pipeline
@@ -104,7 +101,7 @@ public:
 
     void attach_compute_shader(const std::wstring& path, const std::vector<std::wstring>& defines);
 
-    void create_command_list() override;
+    void create_pso_and_root_signature() override;
 
-    void create_command_list(D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* allocator);
+    void create_pso_and_root_signature(D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* allocator);
 };

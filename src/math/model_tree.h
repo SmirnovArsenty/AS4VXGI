@@ -34,7 +34,7 @@ public:
 
     void update();
 
-    void draw(Camera* camera, ID3D12GraphicsCommandList* cmd_list);
+    void draw(ID3D12GraphicsCommandList* cmd_list);
 
     std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> get_index_buffers_srv();
     std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> get_vertex_buffers_srv();
@@ -115,21 +115,8 @@ private:
 
     std::vector<Mesh*> meshes_;
 
-    // struct {
-    //     uint32_t dummy[4];
-    // } const_model_data_;
-    // ConstBuffer<decltype(const_model_data_)> const_model_buffer_;
-
     MODEL_DATA_BIND model_data_;
     ConstBuffer<decltype(model_data_)> model_cb_;
-    // DynamicBuffer<decltype(dynamic_model_data_)> dynamic_model_buffer_;
-
-    // renderstate
-    // ID3D11RasterizerState* rasterizer_state_{ nullptr };
-
-    // debug shaders
-    // GraphicsShader albedo_shader_;
-    // GraphicsShader normal_shader_;
 
     GraphicsPipeline graphics_pipeline_;
 

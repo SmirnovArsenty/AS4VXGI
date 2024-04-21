@@ -267,7 +267,7 @@ void ModelTree::load(const std::string& file, Vector3 position, Quaternion rotat
 
         graphics_pipeline_.declare_bind<CAMERA_DATA_BIND>();
         graphics_pipeline_.declare_bind<MODEL_DATA_BIND>();
-        graphics_pipeline_.create_command_list();
+        graphics_pipeline_.create_pso_and_root_signature();
     }
 
     {
@@ -282,7 +282,7 @@ void ModelTree::load(const std::string& file, Vector3 position, Quaternion rotat
         box_visualize_pipeline_.declare_bind<CAMERA_DATA_BIND>();
         box_visualize_pipeline_.declare_bind<MODEL_DATA_BIND>();
         box_visualize_pipeline_.declare_bind<BOX_TRANSFORM_BIND>();
-        box_visualize_pipeline_.create_command_list();
+        box_visualize_pipeline_.create_pso_and_root_signature();
     }
 
     // initialize GPU buffers
@@ -322,7 +322,7 @@ void ModelTree::update()
 
 }
 
-void ModelTree::draw(Camera* camera, ID3D12GraphicsCommandList* cmd_list)
+void ModelTree::draw(ID3D12GraphicsCommandList* cmd_list)
 {
     const auto render_target = Game::inst()->render().render_target();
     const auto depth_stencil_target = Game::inst()->render().depth_stencil();

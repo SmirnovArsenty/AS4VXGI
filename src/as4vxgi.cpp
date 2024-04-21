@@ -41,7 +41,25 @@ void AS4VXGI_Component::initialize()
     auto device = Game::inst()->render().device();
 
     {
-        if (true)
+        // voxels clear pass
+        {
+            voxels_clear_.attach_compute_shader(L"./resources/shaders/voxels/clear.hlsl", {});
+            voxels_clear_.declare_bind<VOXELS_BIND>();
+            voxels_clear_.create_pso_and_root_signature();
+        }
+        // voxels fill pass
+        {
+            voxels_fill_.attach_compute_shader(L"./resources/shaders/voxels/fill.hlsl", {});
+            voxels_fill_.declare_bind<CAMERA_DATA_BIND>();
+            voxels_fill_.declare_bind<MESH_TREE_BIND>();
+            voxels_fill_.declare_bind<INDICES_BIND>();
+            voxels_fill_.declare_bind<VERTICES_BIND>();
+            voxels_fill_.declare_bind<MODEL_MATRICES_BIND>();
+            voxels_fill_.declare_bind<VOXEL_DATA_BIND>();
+            voxels_fill_.declare_bind<VOXELS_BIND>();
+            voxels_fill_.create_pso_and_root_signature();
+        }
+        // voxels vizualize pass
         {
             D3D12_INPUT_ELEMENT_DESC inputs[] =
             {
@@ -63,16 +81,7 @@ void AS4VXGI_Component::initialize()
 
             stage_visualize_pipeline_.setup_primitive_topology_type(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
 
-            stage_visualize_pipeline_.create_command_list();
-            stage_visualize_pipeline_.cmd()->SetName(L"Voxels visualize");
-        }
-
-        {
-            uav_copy_pipeline_.attach_compute_shader(L"./resources/shaders/voxels/copy_voxels.hlsl", {});
-            uav_copy_pipeline_.declare_bind<VOXELS_SRC_BIND>();
-            uav_copy_pipeline_.declare_bind<VOXELS_DST_BIND>();
-            uav_copy_pipeline_.create_command_list();
-            uav_copy_pipeline_.cmd()->SetName(L"Intermediate->render copy voxels");
+            stage_visualize_pipeline_.create_pso_and_root_signature();
         }
     }
 
@@ -82,20 +91,8 @@ void AS4VXGI_Component::initialize()
         HRESULT_CHECK(device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
             D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(voxels_uav_size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
             D3D12_RESOURCE_STATE_COMMON, nullptr,
-            IID_PPV_ARGS(uav_voxels_resource_intermediate_.GetAddressOf())));
-        uav_voxels_resource_intermediate_->SetName(L"Intermediate voxels resource");
-
-        HRESULT_CHECK(device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-            D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(voxels_uav_size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
-            D3D12_RESOURCE_STATE_COMMON, nullptr,
             IID_PPV_ARGS(uav_voxels_resource_.GetAddressOf())));
         uav_voxels_resource_->SetName(L"Render voxels resource");
-
-        HRESULT_CHECK(device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-            D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(voxels_uav_size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
-            D3D12_RESOURCE_STATE_COMMON, nullptr,
-            IID_PPV_ARGS(uav_voxels_resource_compute_.GetAddressOf())));
-        uav_voxels_resource_->SetName(L"Compute voxels resource");
 
         {
             D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
@@ -106,14 +103,8 @@ void AS4VXGI_Component::initialize()
             uav_desc.Buffer.StructureByteStride = sizeof(Voxel);
             uav_desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
 
-            uav_voxels_resource_index_intermediate_= Game::inst()->render().allocate_resource_descriptor(uav_voxels_intermediate_, uav_voxels_gpu_intermediate_);
-            device->CreateUnorderedAccessView(uav_voxels_resource_intermediate_.Get(), nullptr, &uav_desc, uav_voxels_intermediate_);
-
             uav_voxels_resource_index_ = Game::inst()->render().allocate_resource_descriptor(uav_voxels_, uav_voxels_gpu_);
             device->CreateUnorderedAccessView(uav_voxels_resource_.Get(), nullptr, &uav_desc, uav_voxels_);
-
-            uav_voxels_resource_index_compute_ = Game::inst()->render().allocate_resource_descriptor(uav_voxels_compute_, uav_voxels_gpu_compute_);
-            device->CreateUnorderedAccessView(uav_voxels_resource_compute_.Get(), nullptr, &uav_desc, uav_voxels_compute_);
         }
     }
 
@@ -150,22 +141,6 @@ void AS4VXGI_Component::initialize()
         voxel_data_cb_.initialize();
         voxel_data_cb_.update(voxel_data_);
     }
-
-    {
-        voxels_uav_usage_fence_event_ = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-        if (voxels_uav_usage_fence_event_ == nullptr) {
-            assert(!GetLastError());
-        }
-
-        HRESULT_CHECK(device->CreateFence(voxels_uav_usage_fence_value_, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(voxels_uav_usage_fence_.ReleaseAndGetAddressOf())));
-        voxels_uav_usage_fence_->SetName(L"Compute fence");
-        ++voxels_uav_usage_fence_value_;
-    }
-
-    { // compute thread
-        run_compute_thread_ = true;
-        compute_thread_handle_ = CreateThread(nullptr, 0, &AS4VXGI_Component::compute_proc, this, 0, nullptr);
-    }
 }
 
 void AS4VXGI_Component::draw()
@@ -176,65 +151,77 @@ void AS4VXGI_Component::draw()
     const auto render_target = Game::inst()->render().render_target();
     const auto depth_stencil_target = Game::inst()->render().depth_stencil();
     auto graphics_queue = Game::inst()->render().graphics_queue();
-    if (true)
+
     {
-        // visualize voxel grid
+        ComPtr<ID3D12GraphicsCommandList> cmd;
+        HRESULT_CHECK(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, graphics_command_list_allocator.Get(), nullptr, IID_PPV_ARGS(cmd.ReleaseAndGetAddressOf())));
+        cmd->SetName(L"Voxels command list");
+        HRESULT_CHECK(cmd->Close());
+        HRESULT_CHECK(cmd->Reset(graphics_command_list_allocator.Get(), nullptr));
         {
-            std::lock_guard lg(intermediate_uav_voxels_copy_mutex_);
-
+            PIXBeginEvent(cmd.Get(), PIX_COLOR(0xFF, 0x0, 0x0), "Voxels clear");
             {
-                HRESULT_CHECK(uav_copy_pipeline_.cmd()->Reset(graphics_command_list_allocator.Get(), uav_copy_pipeline_.get_pso()));
-                PIXBeginEvent(uav_copy_pipeline_.cmd(), PIX_COLOR(0x0, 0xFF, 0x0), "Intermediate->render voxels copy");
-
-                uav_copy_pipeline_.cmd()->SetComputeRootSignature(uav_copy_pipeline_.get_root_signature());
-                uav_copy_pipeline_.cmd()->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
-                uav_copy_pipeline_.cmd()->SetComputeRootDescriptorTable(uav_copy_pipeline_.resource_index<VOXELS_SRC_BIND>(), uav_voxels_gpu_intermediate_);
-                uav_copy_pipeline_.cmd()->SetComputeRootDescriptorTable(uav_copy_pipeline_.resource_index<VOXELS_DST_BIND>(), uav_voxels_gpu_);
-                uav_copy_pipeline_.cmd()->Dispatch(align(voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 256) / 256, 1, 1);
-
-                PIXEndEvent(uav_copy_pipeline_.cmd());
-                HRESULT_CHECK(uav_copy_pipeline_.cmd()->Close());
-
-                ID3D12CommandList* list = uav_copy_pipeline_.cmd();
-                graphics_queue->ExecuteCommandLists(1, &list);
+                cmd->SetPipelineState(voxels_clear_.get_pso());
+                cmd->SetComputeRootSignature(voxels_clear_.get_root_signature());
+                cmd->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
+                cmd->SetComputeRootDescriptorTable(voxels_clear_.resource_index<VOXELS_BIND>(), uav_voxels_gpu_);
+                cmd->Dispatch(align(voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 256) / 256, 1, 1);
             }
+            PIXEndEvent(cmd.Get());
 
+            cmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(uav_voxels_resource_.Get()));
+
+            PIXBeginEvent(cmd.Get(), PIX_COLOR(0xFF, 0x0, 0x0), "Voxels fill");
             {
-                PIXBeginEvent(graphics_queue.Get(), PIX_COLOR(0x0, 0xFF, 0x0), "sync after copy intermediate->render");
-                graphics_queue->Signal(voxels_uav_usage_fence_.Get(), voxels_uav_usage_fence_value_);
+                for (int i = 0; i < mesh_trees_srv_.size(); ++i) {
+                    for (int32_t j = 0; j < mesh_trees_srv_[i].size(); ++j) {
+                        cmd->SetPipelineState(voxels_fill_.get_pso());
+                        cmd->SetComputeRootSignature(voxels_fill_.get_root_signature());
+                        cmd->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
 
-                HRESULT_CHECK(voxels_uav_usage_fence_->SetEventOnCompletion(voxels_uav_usage_fence_value_, voxels_uav_usage_fence_event_));
-                if (voxels_uav_usage_fence_->GetCompletedValue() < voxels_uav_usage_fence_value_) {
-                    WaitForSingleObject(voxels_uav_usage_fence_event_, INFINITE);
+                        cmd->SetComputeRootDescriptorTable(voxels_fill_.resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
+                        cmd->SetComputeRootDescriptorTable(voxels_fill_.resource_index<VOXEL_DATA_BIND>(), voxel_data_cb_.gpu_descriptor_handle());
+                        cmd->SetComputeRootDescriptorTable(voxels_fill_.resource_index<VOXELS_BIND>(), uav_voxels_gpu_);
+
+                        voxel_data_.voxelGrid.mesh_node_count = static_cast<int32_t>(mesh_trees_srv_[i][j]->size());
+                        voxel_data_cb_.update(voxel_data_);
+
+                        cmd->SetComputeRootDescriptorTable(voxels_fill_.resource_index<MESH_TREE_BIND>(), mesh_trees_srv_[i][j]->gpu_descriptor_handle());
+                        cmd->SetComputeRootDescriptorTable(voxels_fill_.resource_index<INDICES_BIND>(), index_buffers_srv_[i][j]);
+                        cmd->SetComputeRootDescriptorTable(voxels_fill_.resource_index<VERTICES_BIND>(), vertex_buffers_srv_[i][j]);
+                        cmd->SetComputeRootDescriptorTable(voxels_fill_.resource_index<MODEL_MATRICES_BIND>(), model_matrix_srv_[i][j]->gpu_descriptor_handle());
+
+                        cmd->Dispatch(align(voxel_grid_dim, 4) / 4,
+                            align(voxel_grid_dim, 4) / 4,
+                            align(voxel_grid_dim, 4) / 4);
+                    }
                 }
-                ++voxels_uav_usage_fence_value_;
-                PIXEndEvent(graphics_queue.Get());
             }
+            PIXEndEvent(cmd.Get());
+
+            cmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(uav_voxels_resource_.Get()));
+
+            PIXBeginEvent(cmd.Get(), PIX_COLOR(0x0, 0xFF, 0x0), "Voxels draw");
+            {
+                cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
+                cmd->RSSetViewports(1, &Game::inst()->render().viewport());
+                cmd->RSSetScissorRects(1, &Game::inst()->render().scissor_rect());
+                cmd->OMSetRenderTargets(1, &render_target, 1, &depth_stencil_target);
+
+                cmd->SetPipelineState(stage_visualize_pipeline_.get_pso());
+                cmd->SetGraphicsRootSignature(stage_visualize_pipeline_.get_root_signature());
+                cmd->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
+                cmd->SetGraphicsRootDescriptorTable(stage_visualize_pipeline_.resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
+                cmd->SetGraphicsRootDescriptorTable(stage_visualize_pipeline_.resource_index<VOXELS_BIND>(), uav_voxels_gpu_);
+                cmd->SetGraphicsRootDescriptorTable(stage_visualize_pipeline_.resource_index<VOXEL_DATA_BIND>(), voxel_data_cb_.gpu_descriptor_handle());
+
+                cmd->DrawInstanced(1, voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 0, 0);
+            }
+            PIXEndEvent(cmd.Get());
         }
 
-        {
-            stage_visualize_pipeline_.cmd()->Reset(graphics_command_list_allocator.Get(), stage_visualize_pipeline_.get_pso());
-            PIXBeginEvent(stage_visualize_pipeline_.cmd(), PIX_COLOR(0x0, 0xFF, 0x0), "Voxels draw");
-
-            stage_visualize_pipeline_.cmd()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
-            stage_visualize_pipeline_.cmd()->RSSetViewports(1, &Game::inst()->render().viewport());
-            stage_visualize_pipeline_.cmd()->RSSetScissorRects(1, &Game::inst()->render().scissor_rect());
-            stage_visualize_pipeline_.cmd()->OMSetRenderTargets(1, &render_target, 1, &depth_stencil_target);
-
-            stage_visualize_pipeline_.cmd()->SetGraphicsRootSignature(stage_visualize_pipeline_.get_root_signature());
-            stage_visualize_pipeline_.cmd()->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
-            stage_visualize_pipeline_.cmd()->SetGraphicsRootDescriptorTable(stage_visualize_pipeline_.resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
-            stage_visualize_pipeline_.cmd()->SetGraphicsRootDescriptorTable(stage_visualize_pipeline_.resource_index<VOXELS_BIND>(), uav_voxels_gpu_);
-            stage_visualize_pipeline_.cmd()->SetGraphicsRootDescriptorTable(stage_visualize_pipeline_.resource_index<VOXEL_DATA_BIND>(), voxel_data_cb_.gpu_descriptor_handle());
-
-            stage_visualize_pipeline_.cmd()->DrawInstanced(1, voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 0, 0);
-
-            PIXEndEvent(stage_visualize_pipeline_.cmd());
-            HRESULT_CHECK(stage_visualize_pipeline_.cmd()->Close());
-
-            ID3D12CommandList* lists[] = { stage_visualize_pipeline_.cmd() };
-            graphics_queue->ExecuteCommandLists(_countof(lists), lists);
-        }
+        HRESULT_CHECK(cmd->Close());
+        graphics_queue->ExecuteCommandLists(1, reinterpret_cast<ID3D12CommandList**>(cmd.GetAddressOf()));
     }
 
     ComPtr<ID3D12GraphicsCommandList> draw_cmd_list;
@@ -243,7 +230,7 @@ void AS4VXGI_Component::draw()
     HRESULT_CHECK(draw_cmd_list->Reset(graphics_command_list_allocator.Get(), nullptr));
 
     for (ModelTree* model_tree : model_trees_) {
-        model_tree->draw(Game::inst()->render().camera(), draw_cmd_list.Get());
+        model_tree->draw(draw_cmd_list.Get());
     }
 
     HRESULT_CHECK(draw_cmd_list->Close());
@@ -277,7 +264,6 @@ void AS4VXGI_Component::imgui()
     if (false && local_voxel_grid_dim > 0 && local_voxel_grid_size > 0) {
         /// TODO: handle all uavs recreation
         if (local_voxel_grid_dim != voxel_grid_dim) {
-            std::lock_guard lg(intermediate_uav_voxels_copy_mutex_);
             uav_voxels_resource_.Reset();
             UINT voxels_uav_size = local_voxel_grid_dim * local_voxel_grid_dim * local_voxel_grid_dim * sizeof(Voxel);
             auto device = Game::inst()->render().device();
@@ -323,16 +309,6 @@ void AS4VXGI_Component::update()
 
 void AS4VXGI_Component::destroy_resources()
 {
-    run_compute_thread_ = false;
-    WaitForSingleObject(compute_thread_handle_, 1000);
-    CloseHandle(compute_thread_handle_);
-    compute_thread_handle_ = INVALID_HANDLE_VALUE;
-
-    //stage_visualize_pipeline_;
-
-    voxels_uav_usage_fence_.Reset();
-    CloseHandle(voxels_uav_usage_fence_event_);
-
     model_matrix_srv_.clear();
     mesh_trees_srv_.clear();
 
@@ -344,174 +320,4 @@ void AS4VXGI_Component::destroy_resources()
     model_trees_.clear();
 
     uav_voxels_resource_.Reset();
-    uav_voxels_resource_compute_.Reset();
-    uav_voxels_resource_intermediate_.Reset();
-}
-
-// static
-DWORD AS4VXGI_Component::compute_proc(LPVOID data)
-{
-    //return 0;
-    AS4VXGI_Component* self = static_cast<AS4VXGI_Component*>(data);
-
-    auto device = Game::inst()->render().device();
-    ID3D12CommandQueue* compute_queue;
-    {
-        D3D12_COMMAND_QUEUE_DESC desc{};
-        desc.NodeMask = 0;
-        desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-        desc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
-        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_DISABLE_GPU_TIMEOUT;
-        HRESULT_CHECK(device->CreateCommandQueue(&desc, IID_PPV_ARGS(&compute_queue)));
-        compute_queue->SetName(L"Voxels compute queue");
-    }
-
-    auto resource_heap = Game::inst()->render().resource_descriptor_heap();
-
-    ID3D12CommandAllocator* allocator;
-    HRESULT_CHECK(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&allocator)));
-    allocator->SetName(L"Voxels command allocator");
-
-    UINT64 compute_fence_value = 0;
-    HANDLE compute_fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-    if (compute_fence_event == nullptr) {
-        assert(!GetLastError());
-    }
-
-    ID3D12Fence* compute_fence;
-    HRESULT_CHECK(device->CreateFence(compute_fence_value, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&compute_fence)));
-    compute_fence->SetName(L"Voxels fence");
-    ++compute_fence_value;
-
-    ComputePipeline clear_voxels;
-    clear_voxels.attach_compute_shader(L"./resources/shaders/voxels/clear.hlsl", {});
-    clear_voxels.declare_bind<VOXELS_BIND>();
-    clear_voxels.create_command_list(D3D12_COMMAND_LIST_TYPE_COMPUTE, allocator);
-    clear_voxels.cmd()->SetName(L"Compute clear voxels");
-
-    ComputePipeline fill_voxels;
-    fill_voxels.attach_compute_shader(L"./resources/shaders/voxels/fill.hlsl", {});
-    fill_voxels.declare_bind<CAMERA_DATA_BIND>();
-    fill_voxels.declare_bind<MESH_TREE_BIND>();
-    fill_voxels.declare_bind<INDICES_BIND>();
-    fill_voxels.declare_bind<VERTICES_BIND>();
-    fill_voxels.declare_bind<MODEL_MATRICES_BIND>();
-    fill_voxels.declare_bind<VOXEL_DATA_BIND>();
-    fill_voxels.declare_bind<VOXELS_BIND>();
-    fill_voxels.create_command_list(D3D12_COMMAND_LIST_TYPE_COMPUTE, allocator);
-    fill_voxels.cmd()->SetName(L"Compute fill voxels");
-
-    ComputePipeline copy_voxels;
-    copy_voxels.attach_compute_shader(L"./resources/shaders/voxels/copy_voxels.hlsl", {});
-    copy_voxels.declare_bind<VOXELS_SRC_BIND>();
-    copy_voxels.declare_bind<VOXELS_DST_BIND>();
-    copy_voxels.create_command_list(D3D12_COMMAND_LIST_TYPE_COMPUTE, allocator);
-    copy_voxels.cmd()->SetName(L"Compute->intermediate copy voxels");
-
-    while (self->run_compute_thread_)
-    {
-        HRESULT_CHECK(allocator->Reset());
-
-        {
-            HRESULT_CHECK(clear_voxels.cmd()->Reset(allocator, nullptr));
-            PIXBeginEvent(clear_voxels.cmd(), PIX_COLOR(0xFF, 0x0, 0x0), "Clear voxels");
-
-            clear_voxels.cmd()->SetPipelineState(clear_voxels.get_pso());
-            clear_voxels.cmd()->SetComputeRootSignature(clear_voxels.get_root_signature());
-            clear_voxels.cmd()->SetDescriptorHeaps(1, resource_heap.GetAddressOf());
-            clear_voxels.cmd()->SetComputeRootDescriptorTable(clear_voxels.resource_index<VOXELS_BIND>(), self->uav_voxels_gpu_compute_);
-            clear_voxels.cmd()->Dispatch(align(voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 256) / 256, 1, 1);
-
-            clear_voxels.cmd()->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(self->uav_voxels_resource_compute_.Get()));
-
-            PIXEndEvent(clear_voxels.cmd());
-            HRESULT_CHECK(clear_voxels.cmd()->Close());
-            ID3D12CommandList* list = clear_voxels.cmd();
-            compute_queue->ExecuteCommandLists(1, &list);
-        }
-
-        { // fill voxels uav
-            PIXBeginEvent(compute_queue, PIX_COLOR(0xFF, 0x0, 0x0), "Voxels fill");
-            for (int i = 0; i < self->mesh_trees_srv_.size(); ++i) {
-                for (int32_t j = 0; j < self->mesh_trees_srv_[i].size(); ++j) {
-                    HRESULT_CHECK(fill_voxels.cmd()->Reset(allocator, nullptr));
-                    fill_voxels.cmd()->SetPipelineState(fill_voxels.get_pso());
-                    fill_voxels.cmd()->SetComputeRootSignature(fill_voxels.get_root_signature());
-                    fill_voxels.cmd()->SetDescriptorHeaps(1, resource_heap.GetAddressOf());
-                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<CAMERA_DATA_BIND>(), Game::inst()->render().camera()->gpu_descriptor_handle());
-
-                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VOXEL_DATA_BIND>(), self->voxel_data_cb_.gpu_descriptor_handle());
-                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VOXELS_BIND>(), self->uav_voxels_gpu_compute_);
-
-                    self->voxel_data_.voxelGrid.mesh_node_count = static_cast<int32_t>(self->mesh_trees_srv_[i][j]->size());
-                    self->voxel_data_cb_.update(self->voxel_data_);
-
-                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<MESH_TREE_BIND>(), self->mesh_trees_srv_[i][j]->gpu_descriptor_handle());
-                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<INDICES_BIND>(), self->index_buffers_srv_[i][j]);
-                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<VERTICES_BIND>(), self->vertex_buffers_srv_[i][j]);
-                    fill_voxels.cmd()->SetComputeRootDescriptorTable(fill_voxels.resource_index<MODEL_MATRICES_BIND>(), self->model_matrix_srv_[i][j]->gpu_descriptor_handle());
-
-                    fill_voxels.cmd()->Dispatch(align(voxel_grid_dim, 4) / 4,
-                        align(voxel_grid_dim, 4) / 4,
-                        align(voxel_grid_dim, 4) / 4);
-
-                    HRESULT_CHECK(fill_voxels.cmd()->Close());
-                    ID3D12CommandList* list = fill_voxels.cmd();
-                    compute_queue->ExecuteCommandLists(1, &list);
-
-                    {
-                        PIXBeginEvent(compute_queue, PIX_COLOR(0xFF, 0x0, 0x0), "sync after voxels fill");
-                        HRESULT_CHECK(compute_queue->Signal(compute_fence, compute_fence_value));
-                        HRESULT_CHECK(compute_fence->SetEventOnCompletion(compute_fence_value, compute_fence_event));
-                        if (compute_fence->GetCompletedValue() < compute_fence_value) {
-                            WaitForSingleObject(compute_fence_event, INFINITE);
-                        }
-                        ++compute_fence_value;
-                        PIXEndEvent(compute_queue);
-                    }
-                }
-            }
-            PIXEndEvent(compute_queue);
-        }
-
-        {
-            std::lock_guard lg(self->intermediate_uav_voxels_copy_mutex_);
-
-            { // copy voxels to render thread
-                HRESULT_CHECK(copy_voxels.cmd()->Reset(allocator, copy_voxels.get_pso()));
-                PIXBeginEvent(copy_voxels.cmd(), PIX_COLOR(0xFF, 0x0, 0x0), "Copy voxels");
-
-                copy_voxels.cmd()->SetComputeRootSignature(copy_voxels.get_root_signature());
-                copy_voxels.cmd()->SetDescriptorHeaps(1, resource_heap.GetAddressOf());
-                copy_voxels.cmd()->SetComputeRootDescriptorTable(copy_voxels.resource_index<VOXELS_SRC_BIND>(), self->uav_voxels_gpu_compute_);
-                copy_voxels.cmd()->SetComputeRootDescriptorTable(copy_voxels.resource_index<VOXELS_DST_BIND>(), self->uav_voxels_gpu_intermediate_);
-                copy_voxels.cmd()->Dispatch(align(voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 256) / 256, 1, 1);
-
-                PIXEndEvent(copy_voxels.cmd());
-                HRESULT_CHECK(copy_voxels.cmd()->Close());
-            }
-
-            ID3D12CommandList* list = copy_voxels.cmd();
-            compute_queue->ExecuteCommandLists(1, &list);
-
-            {
-                PIXBeginEvent(compute_queue, PIX_COLOR(0xFF, 0x0, 0x0), "sync after copy compute->intermediate");
-                HRESULT_CHECK(compute_queue->Signal(compute_fence, compute_fence_value));
-                HRESULT_CHECK(compute_fence->SetEventOnCompletion(compute_fence_value, compute_fence_event));
-                if (compute_fence->GetCompletedValue() < compute_fence_value) {
-                    WaitForSingleObject(compute_fence_event, INFINITE);
-                }
-                ++compute_fence_value;
-                PIXEndEvent(compute_queue);
-            }
-        }
-    }
-
-    CloseHandle(compute_fence_event);
-
-    compute_fence->Release();
-    allocator->Release();
-    compute_queue->Release();
-
-    return 0;
 }

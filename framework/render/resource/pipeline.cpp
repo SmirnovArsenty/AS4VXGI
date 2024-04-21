@@ -75,7 +75,6 @@ void CompileShader(std::wstring path, const std::vector<std::wstring>& defines, 
 
 Pipeline::~Pipeline()
 {
-    SAFE_RELEASE(command_list_);
     SAFE_RELEASE(root_signature_);
     SAFE_RELEASE(pso_);
 
@@ -116,11 +115,6 @@ void Pipeline::declare_range(D3D12_DESCRIPTOR_RANGE_TYPE range_type, UINT slot, 
 {
     descriptor_ranges_.push_back({});
     descriptor_ranges_.back().Init(range_type, 1, slot, space, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-}
-
-ID3D12GraphicsCommandList* Pipeline::cmd() const
-{
-    return command_list_.Get();
 }
 
 ID3D12RootSignature* Pipeline::get_root_signature() const
@@ -197,9 +191,10 @@ void GraphicsPipeline::attach_pixel_shader(const std::wstring& path, const std::
     pso_desc_.PS = CD3DX12_SHADER_BYTECODE(pixel_shader_->GetBufferPointer(), pixel_shader_->GetBufferSize());
 }
 
-void GraphicsPipeline::create_command_list()
+void GraphicsPipeline::create_pso_and_root_signature()
 {
-    assert(command_list_.Get() == nullptr);
+    assert(pso_.Get() == nullptr);
+    assert(root_signature_.Get() == nullptr);
 
     auto device = Game::inst()->render().device();
     auto allocator = Game::inst()->render().graphics_command_allocator();
@@ -207,8 +202,6 @@ void GraphicsPipeline::create_command_list()
     create_root_signature();
     pso_desc_.pRootSignature = root_signature_.Get();
     HRESULT_CHECK(device->CreateGraphicsPipelineState(&pso_desc_, IID_PPV_ARGS(pso_.GetAddressOf())));
-    HRESULT_CHECK(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator.Get(), pso_.Get(), IID_PPV_ARGS(command_list_.GetAddressOf())));
-    HRESULT_CHECK(command_list_->Close());
 }
 
 #pragma endregion
@@ -234,23 +227,20 @@ void ComputePipeline::attach_compute_shader(const std::wstring& path, const std:
     pso_desc_.CS = CD3DX12_SHADER_BYTECODE(compute_shader_->GetBufferPointer(), compute_shader_->GetBufferSize());
 }
 
-void ComputePipeline::create_command_list()
+void ComputePipeline::create_pso_and_root_signature()
 {
-    create_command_list(D3D12_COMMAND_LIST_TYPE_DIRECT, Game::inst()->render().graphics_command_allocator().Get());
+    create_pso_and_root_signature(D3D12_COMMAND_LIST_TYPE_DIRECT, Game::inst()->render().graphics_command_allocator().Get());
 }
 
-void ComputePipeline::create_command_list(D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* allocator)
+void ComputePipeline::create_pso_and_root_signature(D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* allocator)
 {
     assert(type == D3D12_COMMAND_LIST_TYPE_DIRECT || type == D3D12_COMMAND_LIST_TYPE_COMPUTE);
-    assert(command_list_.Get() == nullptr);
-
-    auto device = Game::inst()->render().device();
+    assert(pso_.Get() == nullptr);
+    assert(root_signature_.Get() == nullptr);
 
     create_root_signature();
     pso_desc_.pRootSignature = root_signature_.Get();
-    HRESULT_CHECK(device->CreateComputePipelineState(&pso_desc_, IID_PPV_ARGS(pso_.GetAddressOf())));
-    HRESULT_CHECK(device->CreateCommandList(0, type, allocator, pso_.Get(), IID_PPV_ARGS(command_list_.GetAddressOf())));
-    HRESULT_CHECK(command_list_->Close());
+    HRESULT_CHECK(Game::inst()->render().device()->CreateComputePipelineState(&pso_desc_, IID_PPV_ARGS(pso_.GetAddressOf())));
 }
 
 #pragma endregion
