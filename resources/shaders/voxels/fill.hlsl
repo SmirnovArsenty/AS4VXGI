@@ -1,5 +1,15 @@
 #include "voxel.fx"
 
+float4 pack_voxel(Voxel voxel)
+{
+    float4 result;
+    result.x = asfloat(f32tof16(voxel.normal.x) | (f32tof16(voxel.normal.y) << 16));
+    result.y = asfloat(f32tof16(voxel.normal.z) | (f32tof16(voxel.sharpness) << 16));
+    result.z = asfloat(f32tof16(voxel.albedo.x) | (f32tof16(voxel.albedo.y) << 16));
+    result.w = asfloat(f32tof16(voxel.albedo.z) | (f32tof16(voxel.metalness) << 16));
+    return result;
+}
+
 uint get_heap_parent_index(uint index)
 {
     return (max(index, 1u) - 1u) / 2u;
@@ -99,9 +109,7 @@ float triangleIntersection(in Ray ray, float3 v0, float3 v1, float3 v2, float3 n
 [numthreads(4, 4, 4)]
 void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
 {
-#if OPTIMIZATION
     uint hit_buffer[ARRAY_SIZE][3] = (uint[ARRAY_SIZE][3])0; // [optimization] 32-bit buffer to store box hits
-#endif
     uint count_parents_not_found = 0;
 
     uint3 currentIndex = dispatchThreadID;
@@ -112,7 +120,6 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
     bool found = false;
     for (uint ray_index = 0; ray_index < 3; ++ray_index) {
         for (uint i = 0; i < voxelGrid.mesh_node_count; ++i) {
-#if OPTIMIZATION
             uint parent_index = (max(i, 1u) - 1u) / 2u;
             for (parent_index = (max(i, 1u) - 1u) / 2u; parent_index / BITS_COUNT > ARRAY_SIZE; ++count_parents_not_found) {
                 parent_index = (max(parent_index, 1u) - 1u) / 2u;
@@ -122,9 +129,6 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
                 uint parent_hit_bit = (1U << (parent_index - (parent_index / BITS_COUNT) * BITS_COUNT));
                 need_check = (i == 0) || (hit_buffer[parent_index / BITS_COUNT][ray_index] & parent_hit_bit);
             }
-#else
-            bool need_check = true;
-#endif
 
             bool box_intersected = false;
             float box_distance = 0;
@@ -160,12 +164,12 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
                     }
                 }
             }
-#if OPTIMIZATION
+
             uint hit_index = i / BITS_COUNT;
             if (hit_index < ARRAY_SIZE) {
                 hit_buffer[hit_index][ray_index] |= (1U << (i - hit_index * BITS_COUNT));
             }
-#endif
+
             if (tri_t > 0 && (tri_t < t || t == 0)) {
                 box_t = box_distance;
                 t = tri_t;
@@ -189,6 +193,7 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
         voxel.normal = normal;
         voxel.metalness = t;
         voxel.sharpness = asfloat(count_parents_not_found);
-        VOXELS[currentIndex.x + currentIndex.y * voxelGrid.dimension + currentIndex.z * voxelGrid.dimension * voxelGrid.dimension] = voxel;
+
+        VOXELS[uint3(currentIndex.x, currentIndex.y, currentIndex.z)] = pack_voxel(voxel);
     }
 }

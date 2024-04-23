@@ -63,11 +63,14 @@ private:
     ComPtr<ID3D12CommandAllocator> graphics_command_allocator_[swapchain_buffer_count_];
 
     // create_descriptor_heap
-    ComPtr<ID3D12DescriptorHeap> resource_descriptor_heap_;
     UINT resource_descriptor_size_;
-    UINT resources_allocated_;
-    ComPtr<ID3D12DescriptorHeap> sampler_descriptor_heap_;
+    ComPtr<ID3D12DescriptorHeap> gpu_resource_descriptor_heap_;
+    UINT gpu_resources_allocated_;
+    ComPtr<ID3D12DescriptorHeap> cpu_resource_descriptor_heap_;
+    UINT cpu_resources_allocated_;
+
     UINT sampler_descriptor_size_;
+    ComPtr<ID3D12DescriptorHeap> sampler_descriptor_heap_;
 
     // create fence
     HANDLE graphics_fence_event_;
@@ -143,5 +146,6 @@ public:
     const D3D12_VIEWPORT& viewport() const;
     const D3D12_RECT& scissor_rect() const;
 
-    UINT allocate_resource_descriptor(D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE& gpu_handle);
+    UINT allocate_gpu_resource_descriptor(D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE& gpu_handle);
+    UINT allocate_cpu_resource_descriptor(D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handle);
 };

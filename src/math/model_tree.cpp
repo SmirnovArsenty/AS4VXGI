@@ -9,8 +9,6 @@
 #include "render/camera.h"
 #include "model_tree.h"
 
-constexpr float smallest_length = 1000.f;
-
 void ModelTree::Mesh::initialize(//Material& material,
     const std::vector<uint32_t>& indices,
     const std::vector<Vertex>& vertices,
@@ -28,8 +26,12 @@ void ModelTree::Mesh::initialize(//Material& material,
     }
     index_count_ = static_cast<UINT>(indices.size());
 
+    const float smallest_length = (std::min<float>(max_[0] - min_[0],
+                                    std::min<float>(max_[1] - min_[1],
+                                                    max_[2] - min_[2]))) / 2;
+
     mesh_tree_.reserve(index_count_ / 3);
-    split_vertices(min_, max_, 0, index_count_, 0);
+    split_vertices(min_, max_, 0, index_count_, 0, smallest_length);
     uint32_t max_index = 0;
     for (auto& node : mesh_tree_) {
         max_index = std::max<uint32_t>(node.first, max_index);
@@ -81,7 +83,7 @@ void ModelTree::Mesh::initialize(//Material& material,
 
     index_buffer_.initialize(indices_);
     { // index buffer srv
-        index_buffer_srv_resource_index_ = Game::inst()->render().allocate_resource_descriptor(index_buffer_srv_, index_buffer_srv_gpu_);
+        index_buffer_srv_resource_index_ = Game::inst()->render().allocate_gpu_resource_descriptor(index_buffer_srv_, index_buffer_srv_gpu_);
         D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
         desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
         desc.Format = DXGI_FORMAT_UNKNOWN;
@@ -93,7 +95,7 @@ void ModelTree::Mesh::initialize(//Material& material,
     }
     vertex_buffer_.initialize(vertices_);
     { // vertex buffer srv
-        vertex_buffer_srv_resource_index_ = Game::inst()->render().allocate_resource_descriptor(vertex_buffer_srv_, vertex_buffer_srv_gpu_);
+        vertex_buffer_srv_resource_index_ = Game::inst()->render().allocate_gpu_resource_descriptor(vertex_buffer_srv_, vertex_buffer_srv_gpu_);
         D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
         desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
         desc.Format = DXGI_FORMAT_UNKNOWN;
@@ -184,7 +186,7 @@ void ModelTree::Mesh::initialize(//Material& material,
         HRESULT_CHECK(box_transformations_->Map(0, &range, &box_transformations_mapped_ptr_));
         memcpy(box_transformations_mapped_ptr_, box_transformations.data(), box_transformations.size() * sizeof(Matrix));
 
-        box_transformation_resource_index_ = Game::inst()->render().allocate_resource_descriptor(box_transformations_srv_, box_transformations_srv_gpu_);
+        box_transformation_resource_index_ = Game::inst()->render().allocate_gpu_resource_descriptor(box_transformations_srv_, box_transformations_srv_gpu_);
 
         D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
         desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
@@ -436,7 +438,7 @@ std::vector<MeshTreeNode> ModelTree::Mesh::get_mesh_tree() const
     return res;
 }
 
-void ModelTree::Mesh::split_vertices(float min[3], float max[3], int32_t start, int32_t count, int32_t current_mesh_node_index)
+void ModelTree::Mesh::split_vertices(float min[3], float max[3], int32_t start, int32_t count, int32_t current_mesh_node_index, float smallest_length)
 {
     if (count == 0) {
         return;
@@ -521,7 +523,7 @@ void ModelTree::Mesh::split_vertices(float min[3], float max[3], int32_t start, 
             // (2i + 1) and (2i + 2)
             // parent:
             // (i - 1) / 2
-            split_vertices(new_min, new_max, offset, indices_count[i + 1], 2 * current_mesh_node_index + 1 + i);
+            split_vertices(new_min, new_max, offset, indices_count[i + 1], 2 * current_mesh_node_index + 1 + i, smallest_length);
             offset += indices_count[i + 1];
         }
     }

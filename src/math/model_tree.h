@@ -96,7 +96,7 @@ private:
 
         std::unordered_map<int32_t, MeshTreeNode> mesh_tree_;
 
-        void split_vertices(float min[3], float max[3], int32_t start, int32_t count, int32_t current_mesh_node_index);
+        void split_vertices(float min[3], float max[3], int32_t start, int32_t count, int32_t current_mesh_node_index, float smallest_length);
 
 #ifndef NDEBUG
         ComPtr<ID3D12Resource> box_transformations_;

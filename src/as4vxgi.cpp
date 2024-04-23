@@ -9,7 +9,7 @@
 #include <imgui/imgui.h>
 
 int32_t voxel_grid_dim = 100;
-float voxel_grid_size = 10000;
+float voxel_grid_size = 500;
 
 inline int align(int value, int alignment)
 {
@@ -20,17 +20,17 @@ void AS4VXGI_Component::initialize()
 {
     Game::inst()->render().camera()->set_camera(Vector3(5, 0, 0), Vector3(-1, 0, 0));
 
-    constexpr float offset = 300;
-    constexpr float count = 10;
-    for (int x = 0; x < count; ++x) {
-        for (int y = 0; y < count; ++y) {
-            model_trees_.push_back(new ModelTree{});
-            model_trees_.back()->load("./resources/models/suzanne.fbx", Vector3((x - count / 2) * offset, 0, (y - count / 2) * offset));
-        }
-    }
+    // constexpr float offset = 300;
+    // constexpr float count = 10;
+    // for (int x = 0; x < count; ++x) {
+    //     for (int y = 0; y < count; ++y) {
+    //         model_trees_.push_back(new ModelTree{});
+    //         model_trees_.back()->load("./resources/models/suzanne.fbx", Vector3((x - count / 2) * offset, 0, (y - count / 2) * offset));
+    //     }
+    // }
 
-    // model_trees_.push_back(new ModelTree{});
-    // model_trees_.back()->load("./resources/models/suzanne.fbx");//, Vector3(0, 0, 150));
+    model_trees_.push_back(new ModelTree{});
+    model_trees_.back()->load("./resources/models/suzanne.fbx");//, Vector3(0, 0, 150));
 
     //model_trees_.push_back(new ModelTree{});
     //model_trees_.back()->load("./resources/models/suzanne.fbx", Vector3(0, 0, -150));
@@ -43,9 +43,9 @@ void AS4VXGI_Component::initialize()
     {
         // voxels clear pass
         {
-            voxels_clear_.attach_compute_shader(L"./resources/shaders/voxels/clear.hlsl", {});
-            voxels_clear_.declare_bind<VOXELS_BIND>();
-            voxels_clear_.create_pso_and_root_signature();
+            // voxels_clear_.attach_compute_shader(L"./resources/shaders/voxels/clear.hlsl", {});
+            // voxels_clear_.declare_bind<VOXELS_BIND>();
+            // voxels_clear_.create_pso_and_root_signature();
         }
         // voxels fill pass
         {
@@ -89,23 +89,34 @@ void AS4VXGI_Component::initialize()
     UINT voxels_uav_size = voxel_grid_dim * voxel_grid_dim * voxel_grid_dim * sizeof(Voxel);
     {
         HRESULT_CHECK(device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-            D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(voxels_uav_size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
+            D3D12_HEAP_FLAG_NONE,
+            &CD3DX12_RESOURCE_DESC::Tex3D(DXGI_FORMAT_R32G32B32A32_FLOAT,
+                voxel_grid_dim, voxel_grid_dim, voxel_grid_dim, 0,
+                D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
             D3D12_RESOURCE_STATE_COMMON, nullptr,
             IID_PPV_ARGS(uav_voxels_resource_.GetAddressOf())));
         uav_voxels_resource_->SetName(L"Render voxels resource");
 
         {
             D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
-            uav_desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-            uav_desc.Format = DXGI_FORMAT_UNKNOWN;
-            uav_desc.Buffer.CounterOffsetInBytes = 0;
-            uav_desc.Buffer.NumElements = voxel_grid_dim * voxel_grid_dim * voxel_grid_dim;
-            uav_desc.Buffer.StructureByteStride = sizeof(Voxel);
-            uav_desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+            uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
+            uav_desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+            uav_desc.Texture3D.FirstWSlice= 0;
+            uav_desc.Texture3D.MipSlice = 0;
+            uav_desc.Texture3D.WSize = -1;
 
-            uav_voxels_resource_index_ = Game::inst()->render().allocate_resource_descriptor(uav_voxels_, uav_voxels_gpu_);
+            uav_voxels_resource_index_ = Game::inst()->render().allocate_gpu_resource_descriptor(uav_voxels_, uav_voxels_gpu_);
             device->CreateUnorderedAccessView(uav_voxels_resource_.Get(), nullptr, &uav_desc, uav_voxels_);
+
+            uav_voxels_resource_index_cpu_ = Game::inst()->render().allocate_cpu_resource_descriptor(uav_voxels_cpu_);
+            device->CreateUnorderedAccessView(uav_voxels_resource_.Get(), nullptr, &uav_desc, uav_voxels_cpu_);
         }
+
+        ComPtr<ID3D12GraphicsCommandList> barrier;
+        device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, Game::inst()->render().graphics_command_allocator().Get(), nullptr, IID_PPV_ARGS(&barrier));
+        barrier->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(uav_voxels_resource_.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+        barrier->Close();
+        Game::inst()->render().graphics_queue()->ExecuteCommandLists(1, reinterpret_cast<ID3D12CommandList**>(barrier.GetAddressOf()));
     }
 
     // fill voxels
@@ -161,11 +172,14 @@ void AS4VXGI_Component::draw()
         {
             PIXBeginEvent(cmd.Get(), PIX_COLOR(0xFF, 0x0, 0x0), "Voxels clear");
             {
-                cmd->SetPipelineState(voxels_clear_.get_pso());
-                cmd->SetComputeRootSignature(voxels_clear_.get_root_signature());
+                // cmd->SetPipelineState(voxels_clear_.get_pso());
+                // cmd->SetComputeRootSignature(voxels_clear_.get_root_signature());
+                // cmd->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
+                // cmd->SetComputeRootDescriptorTable(voxels_clear_.resource_index<VOXELS_BIND>(), uav_voxels_gpu_);
+                // cmd->Dispatch(align(voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 256) / 256, 1, 1);
+                FLOAT clear[4] = {0, 0, 0, 0};
                 cmd->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
-                cmd->SetComputeRootDescriptorTable(voxels_clear_.resource_index<VOXELS_BIND>(), uav_voxels_gpu_);
-                cmd->Dispatch(align(voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 256) / 256, 1, 1);
+                cmd->ClearUnorderedAccessViewFloat(uav_voxels_gpu_, uav_voxels_cpu_, uav_voxels_resource_.Get(), clear, 0, nullptr);
             }
             PIXEndEvent(cmd.Get());
 

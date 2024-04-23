@@ -47,7 +47,7 @@ public:
             nullptr,
             IID_PPV_ARGS(resource_.ReleaseAndGetAddressOf())));
 
-        resource_index_ = Game::inst()->render().allocate_resource_descriptor(resource_view_, resource_view_gpu_);
+        resource_index_ = Game::inst()->render().allocate_gpu_resource_descriptor(resource_view_, resource_view_gpu_);
 
         D3D12_CONSTANT_BUFFER_VIEW_DESC desc = {};
         desc.BufferLocation = resource_->GetGPUVirtualAddress();
@@ -158,7 +158,7 @@ public:
             copy_cmd->Release();
         }
 
-        resource_index_ = Game::inst()->render().allocate_resource_descriptor(resource_view_, resource_view_gpu_);
+        resource_index_ = Game::inst()->render().allocate_gpu_resource_descriptor(resource_view_, resource_view_gpu_);
 
         D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
         desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;

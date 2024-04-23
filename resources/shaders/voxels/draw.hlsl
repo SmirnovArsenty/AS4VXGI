@@ -18,6 +18,21 @@ struct PS_OUT
     float4 color : SV_Target0;
 };
 
+Voxel unpack_voxel(float4 data)
+{
+    Voxel result;
+    result.normal.x = f16tof32(asuint(data.x) & 0xFFFF);
+    result.normal.y = f16tof32((asuint(data.x) >> 16) & 0xFFFF);
+    result.normal.z = f16tof32(asuint(data.y) & 0xFFFF);
+    result.sharpness = f16tof32((asuint(data.y) >> 16) & 0xFFFF);
+
+    result.albedo.x = f16tof32(asuint(data.z) & 0xFFFF);
+    result.albedo.y = f16tof32((asuint(data.z) >> 16) & 0xFFFF);
+    result.albedo.z = f16tof32(asuint(data.w) & 0xFFFF);
+    result.metalness = f16tof32((asuint(data.w) >> 16) & 0xFFFF);
+    return result;
+}
+
 PS_VS VSMain(VS_IN input)
 {
     PS_VS res = (PS_VS)0;
@@ -35,7 +50,6 @@ PS_VS VSMain(VS_IN input)
     float3 right = float3(1, 0, 0);
 #endif
 
-
     int z_index = input.index / (voxelGrid.dimension * voxelGrid.dimension);
     int y_index = (input.index - z_index * voxelGrid.dimension * voxelGrid.dimension) / voxelGrid.dimension;
     int x_index = input.index - y_index * voxelGrid.dimension - z_index * voxelGrid.dimension * voxelGrid.dimension;
@@ -48,9 +62,10 @@ PS_VS VSMain(VS_IN input)
     pos += forward * (-voxelGrid.size / 2 + unit * z_index);
 
     res.pos = float4(pos, 1.f);
+    Voxel voxel = unpack_voxel(VOXELS[uint3(x_index, y_index, z_index)]);
     //res.pos = mul(cameraData.vp, float4(pos, 1.f));
     //float3 color = abs(normalize(pos - cameraData.position));
-    float3 color = abs(VOXELS[input.index].normal);
+    float3 color = abs(voxel.normal);
     res.color = float4(color, 1.f);
 
     return res;

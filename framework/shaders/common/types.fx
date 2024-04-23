@@ -73,8 +73,6 @@ DECLARE_CBV(VOXEL_DATA, 0, 1)
 {
     VoxelGrid voxelGrid;
 };
-DECLARE_UAV(VOXELS, Voxel, 1, 1)
-DECLARE_UAV(VOXELS_SRC, Voxel, 2, 1)
-DECLARE_UAV(VOXELS_DST, Voxel, 3, 1)
+DECLARE_UAV(VOXELS, float4, 1, 1)
 
 #endif // __TYPES_FX__

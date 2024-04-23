@@ -218,14 +218,19 @@ void Render::create_command_allocator()
 
 void Render::create_descriptor_heap()
 {
+    resource_descriptor_size_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
     D3D12_DESCRIPTOR_HEAP_DESC resource_heap_desc = {};
     resource_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     resource_heap_desc.NumDescriptors = 1000;
     resource_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     resource_heap_desc.NodeMask = 0;
-    HRESULT_CHECK(device_->CreateDescriptorHeap(&resource_heap_desc, IID_PPV_ARGS(resource_descriptor_heap_.ReleaseAndGetAddressOf())));
-    resource_descriptor_size_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    resources_allocated_ = 0;
+    HRESULT_CHECK(device_->CreateDescriptorHeap(&resource_heap_desc, IID_PPV_ARGS(gpu_resource_descriptor_heap_.ReleaseAndGetAddressOf())));
+    gpu_resources_allocated_ = 0;
+
+    resource_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    HRESULT_CHECK(device_->CreateDescriptorHeap(&resource_heap_desc, IID_PPV_ARGS(cpu_resource_descriptor_heap_.ReleaseAndGetAddressOf())));
+    cpu_resources_allocated_ = 0;
 
     D3D12_DESCRIPTOR_HEAP_DESC sampler_heap_desc = {};
     sampler_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
@@ -320,7 +325,8 @@ void Render::destroy_command_allocator()
 void Render::destroy_descriptor_heap()
 {
     SAFE_RELEASE(sampler_descriptor_heap_);
-    SAFE_RELEASE(resource_descriptor_heap_);
+    SAFE_RELEASE(gpu_resource_descriptor_heap_);
+    SAFE_RELEASE(cpu_resource_descriptor_heap_);
 }
 
 void Render::destroy_fence()
@@ -545,7 +551,7 @@ ComPtr<ID3D12CommandAllocator> Render::graphics_command_allocator() const
 
 ComPtr<ID3D12DescriptorHeap> Render::resource_descriptor_heap() const
 {
-    return resource_descriptor_heap_;
+    return gpu_resource_descriptor_heap_;
 }
 
 ComPtr<ID3D12DescriptorHeap> Render::sampler_descriptor_heap() const
@@ -573,17 +579,27 @@ const D3D12_RECT& Render::scissor_rect() const
     return scissor_rect_;
 }
 
-UINT Render::allocate_resource_descriptor(D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE& gpu_handle)
+UINT Render::allocate_gpu_resource_descriptor(D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE& gpu_handle)
 {
     {
-        CD3DX12_CPU_DESCRIPTOR_HANDLE handle(resource_descriptor_heap_->GetCPUDescriptorHandleForHeapStart());
-        handle.Offset(resources_allocated_, resource_descriptor_size_);
+        CD3DX12_CPU_DESCRIPTOR_HANDLE handle(gpu_resource_descriptor_heap_->GetCPUDescriptorHandleForHeapStart());
+        handle.Offset(gpu_resources_allocated_, resource_descriptor_size_);
         cpu_handle = handle;
     }
     {
-        CD3DX12_GPU_DESCRIPTOR_HANDLE handle(resource_descriptor_heap_->GetGPUDescriptorHandleForHeapStart());
-        handle.Offset(resources_allocated_, resource_descriptor_size_);
+        CD3DX12_GPU_DESCRIPTOR_HANDLE handle(gpu_resource_descriptor_heap_->GetGPUDescriptorHandleForHeapStart());
+        handle.Offset(gpu_resources_allocated_, resource_descriptor_size_);
         gpu_handle = handle;
     }
-    return resources_allocated_++;
+    return gpu_resources_allocated_++;
+}
+
+UINT Render::allocate_cpu_resource_descriptor(D3D12_CPU_DESCRIPTOR_HANDLE& cpu_handle)
+{
+    {
+        CD3DX12_CPU_DESCRIPTOR_HANDLE handle(cpu_resource_descriptor_heap_->GetCPUDescriptorHandleForHeapStart());
+        handle.Offset(cpu_resources_allocated_, resource_descriptor_size_);
+        cpu_handle = handle;
+    }
+    return cpu_resources_allocated_++;
 }

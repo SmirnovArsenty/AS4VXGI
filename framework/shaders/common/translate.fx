@@ -39,7 +39,7 @@ struct BindInfo
 #define DECLARE_CBV(NAME, SLOT, SPACE) cbuffer NAME : register(b##SLOT, space##SPACE)
 
 #define DECLARE_SRV(NAME, TYPE, SLOT, SPACE) StructuredBuffer<TYPE> NAME : register(t##SLOT, space##SPACE);
-#define DECLARE_UAV(NAME, TYPE, SLOT, SPACE) RWStructuredBuffer<TYPE> NAME : register(u##SLOT, space##SPACE);
+#define DECLARE_UAV(NAME, TYPE, SLOT, SPACE) RWTexture3D<TYPE> NAME : register(u##SLOT, space##SPACE);
 
 #endif
 
