@@ -37,18 +37,9 @@ PS_VS VSMain(VS_IN input)
 {
     PS_VS res = (PS_VS)0;
 
-#if 0
-    float3 up = float3(0, 1, 0);
-    float3 right = cross(cameraData.forward, up);
-    right = normalize(right);
-    up = cross(cameraData.forward, right);
-    up = normalize(up);
-    float3 forward = cameraData.forward;
-#else
     float3 forward = float3(0, 0, -1);
     float3 up = float3(0, 1, 0);
     float3 right = float3(1, 0, 0);
-#endif
 
     int z_index = input.index / (voxelGrid.dimension * voxelGrid.dimension);
     int y_index = (input.index - z_index * voxelGrid.dimension * voxelGrid.dimension) / voxelGrid.dimension;
@@ -62,9 +53,9 @@ PS_VS VSMain(VS_IN input)
     pos += forward * (-voxelGrid.size / 2 + unit * z_index);
 
     res.pos = float4(pos, 1.f);
+
     Voxel voxel = unpack_voxel(VOXELS[uint3(x_index, y_index, z_index)]);
-    //res.pos = mul(cameraData.vp, float4(pos, 1.f));
-    //float3 color = abs(normalize(pos - cameraData.position));
+
     float3 color = abs(voxel.normal);
     res.color = float4(color, 1.f);
 

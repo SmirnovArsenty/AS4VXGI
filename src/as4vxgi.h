@@ -27,7 +27,6 @@ private:
     VOXEL_DATA_BIND voxel_data_;
     ConstBuffer<VOXEL_DATA_BIND> voxel_data_cb_;
 
-    //ComputePipeline voxels_clear_;
     ComputePipeline voxels_fill_;
 
     ComPtr<ID3D12Resource> uav_voxels_resource_{ nullptr };

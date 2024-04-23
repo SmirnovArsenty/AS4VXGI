@@ -41,12 +41,6 @@ void AS4VXGI_Component::initialize()
     auto device = Game::inst()->render().device();
 
     {
-        // voxels clear pass
-        {
-            // voxels_clear_.attach_compute_shader(L"./resources/shaders/voxels/clear.hlsl", {});
-            // voxels_clear_.declare_bind<VOXELS_BIND>();
-            // voxels_clear_.create_pso_and_root_signature();
-        }
         // voxels fill pass
         {
             voxels_fill_.attach_compute_shader(L"./resources/shaders/voxels/fill.hlsl", {});
@@ -172,11 +166,6 @@ void AS4VXGI_Component::draw()
         {
             PIXBeginEvent(cmd.Get(), PIX_COLOR(0xFF, 0x0, 0x0), "Voxels clear");
             {
-                // cmd->SetPipelineState(voxels_clear_.get_pso());
-                // cmd->SetComputeRootSignature(voxels_clear_.get_root_signature());
-                // cmd->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
-                // cmd->SetComputeRootDescriptorTable(voxels_clear_.resource_index<VOXELS_BIND>(), uav_voxels_gpu_);
-                // cmd->Dispatch(align(voxel_grid_dim * voxel_grid_dim * voxel_grid_dim, 256) / 256, 1, 1);
                 FLOAT clear[4] = {0, 0, 0, 0};
                 cmd->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
                 cmd->ClearUnorderedAccessViewFloat(uav_voxels_gpu_, uav_voxels_cpu_, uav_voxels_resource_.Get(), clear, 0, nullptr);
