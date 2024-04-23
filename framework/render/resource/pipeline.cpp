@@ -3,72 +3,88 @@
 #include "render/render.h"
 
 #include <sstream>
+#include <fstream>
+#include <d3dcompiler.h>
 #include <d3d12shader.h>
 
 #pragma comment(lib, "dxcompiler.lib")
 
-void CompileShader(std::wstring path, const std::vector<std::wstring>& defines, const wchar_t* main, const wchar_t* version, _In_ REFIID iid, _COM_Outptr_opt_result_maybenull_ void** ppvObject)
+ComPtr<ID3DBlob> LoadShader(std::wstring path, std::wstring stage)
 {
-    ComPtr<IDxcUtils> utils;
-    ComPtr<IDxcCompiler3> compiler;
-    DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&utils));
-    DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&compiler));
+    std::ifstream fin(path + L"." + stage + L".cso", std::ios::binary);
 
-    WCHAR cwd[256];
-    GetCurrentDirectoryW(256, cwd);
+    fin.seekg(0, std::ios_base::end);
+    SIZE_T size = (SIZE_T)fin.tellg();
+    fin.seekg(0, std::ios_base::beg);
 
-    std::vector<LPCWSTR> args = {
-        path.c_str(),
-        L"-E", main,
-        L"-T", version,
-    #if !defined(NDEBUG)
-        L"-Zs",
-    #endif
-        // L"-Fo", (path + L".bin").c_str(),
-        // L"-Fd", (path + L".pdb").c_str(),
-        // L"-Qstring_reflect"
-    };
-    for (size_t i = 0; i < defines.size(); ++i) {
-        args.push_back(L"-D");
-        args.push_back(defines[i].c_str());
-    }
+    ComPtr<ID3DBlob> blob;
+    D3DCreateBlob(size, &blob);
 
-    ComPtr<IDxcBlobEncoding> source;
-    utils->LoadFile(path.c_str(), nullptr, source.GetAddressOf());
-    DxcBuffer source_buffer;
-    source_buffer.Ptr = source->GetBufferPointer();
-    source_buffer.Size = source->GetBufferSize();
-    source_buffer.Encoding = DXC_CP_ACP;
+    fin.read(reinterpret_cast<char*>(blob->GetBufferPointer()), size);
+    fin.close();
 
-    ComPtr<IDxcResult> result;
+    return blob;
 
-    ComPtr<IDxcIncludeHandler> include_handler;
-    utils->CreateDefaultIncludeHandler(include_handler.GetAddressOf());
-
-    compiler->Compile(&source_buffer, args.data(), static_cast<UINT32>(args.size()), include_handler.Get(), IID_PPV_ARGS(&result));
-    include_handler = nullptr;
-    source = nullptr;
-
-    ComPtr<IDxcBlobUtf8> error;
-    result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&error), nullptr);
-    if (error != nullptr && error->GetStringLength() != 0) {
-        OutputDebugString(error->GetStringPointer());
-    }
-    error = nullptr;
-
-    HRESULT hres;
-    result->GetStatus(&hres);
-    if (FAILED(hres)) {
-        assert(false);
-        return;
-    }
-
-    ComPtr<IDxcBlobUtf16> shader_name;
-    result->GetOutput(DXC_OUT_OBJECT, iid, ppvObject, &shader_name);
-    shader_name = nullptr;
-
-    utils = nullptr;
-    compiler = nullptr;
+    // ComPtr<IDxcUtils> utils;
+    // ComPtr<IDxcCompiler3> compiler;
+    // DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&utils));
+    // DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&compiler));
+    // 
+    // WCHAR cwd[256];
+    // GetCurrentDirectoryW(256, cwd);
+    // 
+    // std::vector<LPCWSTR> args = {
+    //     path.c_str(),
+    //     L"-E", main,
+    //     L"-T", version,
+    // #if !defined(NDEBUG)
+    //     L"-Zs",
+    // #endif
+    //     L"-Fo", (path + L".cso").c_str(),
+    //     L"-Fd", (path + L".pdb").c_str(),
+    //     // L"-Qstring_reflect"
+    // };
+    // for (size_t i = 0; i < defines.size(); ++i) {
+    //     args.push_back(L"-D");
+    //     args.push_back(defines[i].c_str());
+    // }
+    // 
+    // ComPtr<IDxcBlobEncoding> source;
+    // utils->LoadFile(path.c_str(), nullptr, source.GetAddressOf());
+    // DxcBuffer source_buffer;
+    // source_buffer.Ptr = source->GetBufferPointer();
+    // source_buffer.Size = source->GetBufferSize();
+    // source_buffer.Encoding = DXC_CP_ACP;
+    // 
+    // ComPtr<IDxcResult> result;
+    // 
+    // ComPtr<IDxcIncludeHandler> include_handler;
+    // utils->CreateDefaultIncludeHandler(include_handler.GetAddressOf());
+    // 
+    // compiler->Compile(&source_buffer, args.data(), static_cast<UINT32>(args.size()), include_handler.Get(), IID_PPV_ARGS(&result));
+    // include_handler = nullptr;
+    // source = nullptr;
+    // 
+    // ComPtr<IDxcBlobUtf8> error;
+    // result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&error), nullptr);
+    // if (error != nullptr && error->GetStringLength() != 0) {
+    //     OutputDebugString(error->GetStringPointer());
+    // }
+    // error = nullptr;
+    // 
+    // HRESULT hres;
+    // result->GetStatus(&hres);
+    // if (FAILED(hres)) {
+    //     assert(false);
+    //     return;
+    // }
+    // 
+    // ComPtr<IDxcBlobUtf16> shader_name;
+    // result->GetOutput(DXC_OUT_OBJECT, iid, ppvObject, &shader_name);
+    // shader_name = nullptr;
+    // 
+    // utils = nullptr;
+    // compiler = nullptr;
 }
 
 #pragma region ================================================================================================Pipeline================================================================================================
@@ -172,21 +188,21 @@ void GraphicsPipeline::setup_input_layout(const D3D12_INPUT_ELEMENT_DESC* inputE
 
 void GraphicsPipeline::attach_vertex_shader(const std::wstring& path, const std::vector<std::wstring>& defines)
 {
-    CompileShader(path, defines, L"VSMain", L"vs_6_0", IID_PPV_ARGS(vertex_shader_.GetAddressOf()));
+    vertex_shader_ = LoadShader(path, L"vertex");
 
     pso_desc_.VS = CD3DX12_SHADER_BYTECODE(vertex_shader_->GetBufferPointer(), vertex_shader_->GetBufferSize());
 }
 
 void GraphicsPipeline::attach_geometry_shader(const std::wstring& path, const std::vector<std::wstring>& defines)
 {
-    CompileShader(path, defines, L"GSMain", L"gs_6_0", IID_PPV_ARGS(geometry_shader_.GetAddressOf()));
+    geometry_shader_ = LoadShader(path, L"geometry");
 
     pso_desc_.GS = CD3DX12_SHADER_BYTECODE(geometry_shader_->GetBufferPointer(), geometry_shader_->GetBufferSize());
 }
 
 void GraphicsPipeline::attach_pixel_shader(const std::wstring& path, const std::vector<std::wstring>& defines)
 {
-    CompileShader(path, defines, L"PSMain", L"ps_6_0", IID_PPV_ARGS(pixel_shader_.GetAddressOf()));
+    pixel_shader_ = LoadShader(path, L"pixel");
 
     pso_desc_.PS = CD3DX12_SHADER_BYTECODE(pixel_shader_->GetBufferPointer(), pixel_shader_->GetBufferSize());
 }
@@ -222,7 +238,7 @@ ComputePipeline::~ComputePipeline()
 
 void ComputePipeline::attach_compute_shader(const std::wstring& path, const std::vector<std::wstring>& defines)
 {
-    CompileShader(path, defines, L"CSMain", L"cs_6_0", IID_PPV_ARGS(compute_shader_.GetAddressOf()));
+    compute_shader_ = LoadShader(path, L"compute");
 
     pso_desc_.CS = CD3DX12_SHADER_BYTECODE(compute_shader_->GetBufferPointer(), compute_shader_->GetBufferSize());
 }

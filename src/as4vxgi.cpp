@@ -20,17 +20,17 @@ void AS4VXGI_Component::initialize()
 {
     Game::inst()->render().camera()->set_camera(Vector3(5, 0, 0), Vector3(-1, 0, 0));
 
-    // constexpr float offset = 300;
-    // constexpr float count = 10;
-    // for (int x = 0; x < count; ++x) {
-    //     for (int y = 0; y < count; ++y) {
-    //         model_trees_.push_back(new ModelTree{});
-    //         model_trees_.back()->load("./resources/models/suzanne.fbx", Vector3((x - count / 2) * offset, 0, (y - count / 2) * offset));
-    //     }
-    // }
+    constexpr float offset = 300;
+    constexpr float count = 10;
+    for (int x = 0; x < count; ++x) {
+        for (int y = 0; y < count; ++y) {
+            model_trees_.push_back(new ModelTree{});
+            model_trees_.back()->load("./resources/models/suzanne.fbx", Vector3((x - count / 2) * offset, 0, (y - count / 2) * offset));
+        }
+    }
 
-    model_trees_.push_back(new ModelTree{});
-    model_trees_.back()->load("./resources/models/suzanne.fbx");//, Vector3(0, 0, 150));
+    // model_trees_.push_back(new ModelTree{});
+    // model_trees_.back()->load("./resources/models/suzanne.fbx");//, Vector3(0, 0, 150));
 
     //model_trees_.push_back(new ModelTree{});
     //model_trees_.back()->load("./resources/models/suzanne.fbx", Vector3(0, 0, -150));

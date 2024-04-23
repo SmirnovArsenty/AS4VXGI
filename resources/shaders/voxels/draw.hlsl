@@ -55,8 +55,10 @@ PS_VS VSMain(VS_IN input)
     res.pos = float4(pos, 1.f);
 
     Voxel voxel = unpack_voxel(VOXELS[uint3(x_index, y_index, z_index)]);
+    uint count_parents_not_found = asuint(voxel.sharpness);
 
     float3 color = abs(voxel.normal);
+
     res.color = float4(color, 1.f);
 
     return res;

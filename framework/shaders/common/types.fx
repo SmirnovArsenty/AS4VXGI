@@ -1,7 +1,7 @@
 #ifndef __TYPES_FX__
 #define __TYPES_FX__
 
-#include "../../../framework/shaders/common/translate.fx"
+#include "translate.fx"
 
 struct CameraData
 {

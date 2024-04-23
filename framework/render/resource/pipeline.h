@@ -68,9 +68,9 @@ class GraphicsPipeline : public Pipeline
 private:
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc_;
 
-    ComPtr<IDxcBlob> pixel_shader_{ nullptr };
-    ComPtr<IDxcBlob> vertex_shader_{ nullptr };
-    ComPtr<IDxcBlob> geometry_shader_{ nullptr };
+    ComPtr<ID3DBlob> pixel_shader_{ nullptr };
+    ComPtr<ID3DBlob> vertex_shader_{ nullptr };
+    ComPtr<ID3DBlob> geometry_shader_{ nullptr };
 
     ComPtr<ID3D12Resource> vertex_buffer_{ nullptr };
     D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view_{};
@@ -94,7 +94,7 @@ class ComputePipeline : public Pipeline
 private:
     D3D12_COMPUTE_PIPELINE_STATE_DESC pso_desc_;
 
-    ComPtr<IDxcBlob> compute_shader_{ nullptr };
+    ComPtr<ID3DBlob> compute_shader_{ nullptr };
 public:
     ComputePipeline();
     ~ComputePipeline();

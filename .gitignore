@@ -5,3 +5,5 @@ build/
 *.lib
 .vscode
 imgui.ini
+*.cso
+*.pdb
