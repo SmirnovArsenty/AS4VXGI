@@ -8,8 +8,8 @@
 
 #include <imgui/imgui.h>
 
-int32_t voxel_grid_dim = 100;
-float voxel_grid_size = 500;
+int32_t voxel_grid_dim = 300;
+float voxel_grid_size = 1000;
 
 inline int align(int value, int alignment)
 {
@@ -20,17 +20,17 @@ void AS4VXGI_Component::initialize()
 {
     Game::inst()->render().camera()->set_camera(Vector3(5, 0, 0), Vector3(-1, 0, 0));
 
-    constexpr float offset = 300;
-    constexpr float count = 10;
-    for (int x = 0; x < count; ++x) {
-        for (int y = 0; y < count; ++y) {
-            model_trees_.push_back(new ModelTree{});
-            model_trees_.back()->load("./resources/models/suzanne.fbx", Vector3((x - count / 2) * offset, 0, (y - count / 2) * offset));
-        }
-    }
+    // constexpr float offset = 300;
+    // constexpr int count = 2;
+    // for (int x = -count; x <= count; ++x) {
+    //     for (int y = -count; y <= count; ++y) {
+    //         model_trees_.push_back(new ModelTree{});
+    //         model_trees_.back()->load("./resources/models/suzanne.fbx", Vector3(x * offset, 0, y * offset));
+    //     }
+    // }
 
-    // model_trees_.push_back(new ModelTree{});
-    // model_trees_.back()->load("./resources/models/suzanne.fbx");//, Vector3(0, 0, 150));
+    model_trees_.push_back(new ModelTree{});
+    model_trees_.back()->load("./resources/models/suzanne.fbx");//, Vector3(0, 0, 150));
 
     //model_trees_.push_back(new ModelTree{});
     //model_trees_.back()->load("./resources/models/suzanne.fbx", Vector3(0, 0, -150));
@@ -80,7 +80,7 @@ void AS4VXGI_Component::initialize()
     }
 
     // create voxels uavs
-    UINT voxels_uav_size = voxel_grid_dim * voxel_grid_dim * voxel_grid_dim * sizeof(Voxel);
+    UINT voxels_uav_size = voxel_grid_dim * voxel_grid_dim * voxel_grid_dim * sizeof(Voxel) / 2;
     {
         HRESULT_CHECK(device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
             D3D12_HEAP_FLAG_NONE,
@@ -164,15 +164,15 @@ void AS4VXGI_Component::draw()
         HRESULT_CHECK(cmd->Close());
         HRESULT_CHECK(cmd->Reset(graphics_command_list_allocator.Get(), nullptr));
         {
-            PIXBeginEvent(cmd.Get(), PIX_COLOR(0xFF, 0x0, 0x0), "Voxels clear");
-            {
-                FLOAT clear[4] = {0, 0, 0, 0};
-                cmd->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
-                cmd->ClearUnorderedAccessViewFloat(uav_voxels_gpu_, uav_voxels_cpu_, uav_voxels_resource_.Get(), clear, 0, nullptr);
-            }
-            PIXEndEvent(cmd.Get());
-
-            cmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(uav_voxels_resource_.Get()));
+            // PIXBeginEvent(cmd.Get(), PIX_COLOR(0xFF, 0x0, 0x0), "Voxels clear");
+            // {
+            //     FLOAT clear[4] = {0, 0, 0, 0};
+            //     cmd->SetDescriptorHeaps(1, resource_descriptor_heap.GetAddressOf());
+            //     cmd->ClearUnorderedAccessViewFloat(uav_voxels_gpu_, uav_voxels_cpu_, uav_voxels_resource_.Get(), clear, 0, nullptr);
+            // }
+            // PIXEndEvent(cmd.Get());
+            
+            // cmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(uav_voxels_resource_.Get()));
 
             PIXBeginEvent(cmd.Get(), PIX_COLOR(0xFF, 0x0, 0x0), "Voxels fill");
             {
@@ -232,9 +232,11 @@ void AS4VXGI_Component::draw()
     HRESULT_CHECK(draw_cmd_list->Close());
     HRESULT_CHECK(draw_cmd_list->Reset(graphics_command_list_allocator.Get(), nullptr));
 
+    PIXBeginEvent(draw_cmd_list.Get(), PIX_COLOR(0x0, 0xFF, 0x0), "Meshes draw");
     for (ModelTree* model_tree : model_trees_) {
         model_tree->draw(draw_cmd_list.Get());
     }
+    PIXEndEvent(draw_cmd_list.Get());
 
     HRESULT_CHECK(draw_cmd_list->Close());
     graphics_queue->ExecuteCommandLists(1, (ID3D12CommandList**)draw_cmd_list.GetAddressOf());

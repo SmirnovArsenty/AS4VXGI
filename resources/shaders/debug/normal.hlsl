@@ -38,7 +38,7 @@ PS_OUT PSMain(PS_IN input)
 {
     PS_OUT res = (PS_OUT)0;
 
-    res.color = input.normal;
+    res.color = input.normal * 0.2;
 
     return res;
 }

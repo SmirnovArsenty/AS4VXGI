@@ -88,8 +88,8 @@ bool Win::initialize(uint32_t w, uint32_t h)
     // Register the window class.
     RegisterClassEx(&wc);
 
-    auto screenWidth = 800;
-    auto screenHeight = 800;
+    auto screenWidth = w;
+    auto screenHeight = h;
 
     RECT windowRect = { 0, 0, static_cast<LONG>(screenWidth), static_cast<LONG>(screenHeight) };
     AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);

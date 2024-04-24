@@ -18,7 +18,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, char*, int)
 
     Game::inst()->add_component(new AS4VXGI_Component{});
 
-    Game::inst()->initialize(800, 800);
+    Game::inst()->initialize(1280, 720);
     Game::inst()->run();
     Game::inst()->destroy();
 

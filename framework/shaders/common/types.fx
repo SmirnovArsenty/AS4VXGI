@@ -22,7 +22,7 @@ struct VoxelGrid
     int dimension;
     float size;
     UINT mesh_node_count;
-    float dummy;
+    UINT tree_count;
 
     FLOAT4 _[15]; // align by D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT (256)
 };
